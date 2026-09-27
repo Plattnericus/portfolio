@@ -72,6 +72,9 @@ function loadSprites(onReady: () => void) {
     if (cancelled) return;
     rest.forEach((src) => {
       const img = new Image();
+      /* background warm-up: never ahead of the project clips or fonts */
+      img.fetchPriority = "low";
+      img.decoding = "async";
       img.src = src;
     });
   });

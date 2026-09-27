@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 
-/* GLCanvas pulls in Three.js + React Three Fiber + drei — the single
+/* GLCanvas pulls in Three.js + React Three Fiber — the single
    largest JS chunk this site ships. It's WebGL-only and already has its
    own reduced-motion/support gating, so there's nothing for it to render
    on the server anyway; ssr:false keeps that whole chunk out of the

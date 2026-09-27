@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { PerformanceMonitor, useGLTF } from "@react-three/drei";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PALETTE } from "@/lib/palette";
 import { RETHINK_COVER_AT } from "@/lib/rethink";
 import {
   ARM_MODEL_URL,
   NORMALIZED_ARM_HEIGHT,
+  preloadArm,
   RAW_ARM_HEIGHT,
   orangeHandMaterial,
   useChromeArm,
@@ -50,7 +50,7 @@ const warpVelocity: Progress = { value: 0 };
    once in the browser, never during SSR), and preloading needs to fire
    before any component gets a chance to render anyway. */
 if (typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-  useGLTF.preload(ARM_MODEL_URL);
+  preloadArm();
 }
 
 /* ------------------------------------------------------------------ */
@@ -729,6 +729,44 @@ function Scene({ compact }: { compact: boolean }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Frame-rate watch — drops the canvas to 1x once the device clearly    */
+/* can't keep up. Averages over a few seconds so one hitch (a tab       */
+/* switch, a GC pause) never counts.                                    */
+/* ------------------------------------------------------------------ */
+
+const WATCH_WINDOW_MS = 250;
+const WATCH_WINDOWS = 10;
+const LOW_FPS = 50;
+
+function FrameRateWatch({ onDecline }: { onDecline: () => void }) {
+  const state = useRef({ frames: 0, since: 0, samples: [] as number[], done: false });
+
+  useFrame(() => {
+    const watch = state.current;
+    if (watch.done) return;
+    const now = performance.now();
+    if (!watch.since) watch.since = now;
+    watch.frames++;
+    const elapsed = now - watch.since;
+    if (elapsed < WATCH_WINDOW_MS) return;
+    /* a window much longer than asked for means the tab was hidden or
+       throttled, not that the GPU was slow — start over */
+    if (elapsed < WATCH_WINDOW_MS * 4) watch.samples.push((watch.frames * 1000) / elapsed);
+    watch.frames = 0;
+    watch.since = now;
+    if (watch.samples.length < WATCH_WINDOWS) return;
+    const average = watch.samples.reduce((sum, fps) => sum + fps, 0) / watch.samples.length;
+    watch.samples.shift();
+    if (average < LOW_FPS) {
+      watch.done = true;
+      onDecline();
+    }
+  });
+
+  return null;
+}
+
 type GLPreferences = {
   reducedMotion: boolean;
   compactViewport: boolean;
@@ -852,7 +890,7 @@ export default function GLCanvas() {
               window.dispatchEvent(new CustomEvent("gl-ready"));
             }}
           >
-            <PerformanceMonitor flipflops={1} onDecline={() => setLowPower(true)} />
+            <FrameRateWatch onDecline={() => setLowPower(true)} />
             <Scene compact={preferences.compactViewport} />
           </Canvas>
         </GLErrorBoundary>

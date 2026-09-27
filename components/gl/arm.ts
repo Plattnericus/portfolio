@@ -5,7 +5,8 @@
 
 import { useMemo } from "react";
 import * as THREE from "three";
-import { useGLTF } from "@react-three/drei";
+import { useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { PALETTE } from "@/lib/palette";
 
@@ -31,6 +32,13 @@ if (typeof THREE.setConsoleFunction === "function") {
 }
 
 export const ARM_MODEL_URL = "/models/arm/arm.glb";
+
+/** Starts fetching and parsing the arm before any scene asks for it. Plain
+    GLTFLoader through R3F's loader cache: the model uses no Draco, Meshopt or
+    KTX2 compression, so drei's useGLTF would only ship their decoders. */
+export function preloadArm() {
+  useLoader.preload(GLTFLoader, ARM_MODEL_URL);
+}
 
 /* ------------------------------------------------------------------ */
 /* Arm models — C4D exports ship without materials and at ~70 units,   */
@@ -119,7 +127,7 @@ export function useChromeArm(
   targetHeight: number,
   material: THREE.Material = chromeMaterial,
 ) {
-  const { scene } = useGLTF(url);
+  const { scene } = useLoader(GLTFLoader, url);
   const cloned = useMemo(() => {
     const copy = cloneSkeleton(scene);
     copy.traverse((child) => {

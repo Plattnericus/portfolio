@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { detectOS, type OS } from "./osDetect";
-import { COPY, RTL_LANGS, detectLang, type Lang } from "./reducedMotionCopy";
+import type { Lang } from "./reducedMotionCopy";
 
-type Shown = { os: OS; lang: Lang };
+type Copy = typeof import("./reducedMotionCopy");
+type Shown = { os: OS; lang: Lang; copy: Copy };
 
 /** A visitor with reduced motion enabled sees this site's calm, fully static
     page on purpose — see GLCanvas/ClawdPet/IntroLoader, which all skip
@@ -39,17 +40,23 @@ export default function ReducedMotionNotice() {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    /* deferred a frame so setState stays out of the effect body itself */
-    const raf = requestAnimationFrame(() => {
-      if (mq.matches && !dismissedRef.current) {
-        setShown({ os: detectOS(), lang: detectLang() });
-      }
-    });
+    /* The 50-language table is only fetched by the visitors who will
+       actually see it — everyone else never downloads a byte of it. */
+    let cancelled = false;
+    if (mq.matches) {
+      import("./reducedMotionCopy")
+        .then((copy) => {
+          if (!cancelled && !dismissedRef.current) {
+            setShown({ os: detectOS(), lang: copy.detectLang(), copy });
+          }
+        })
+        .catch(() => {});
+    }
     const onChange = () => window.location.reload();
     mq.addEventListener("change", onChange);
 
     return () => {
-      cancelAnimationFrame(raf);
+      cancelled = true;
       mq.removeEventListener("change", onChange);
     };
   }, []);
@@ -61,8 +68,8 @@ export default function ReducedMotionNotice() {
     setShown(null);
   };
 
-  const copy = COPY[shown.lang];
-  const rtl = RTL_LANGS.has(shown.lang);
+  const copy = shown.copy.COPY[shown.lang];
+  const rtl = shown.copy.RTL_LANGS.has(shown.lang);
 
   return (
     <div className="motion-notice" role="status">

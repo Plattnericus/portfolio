@@ -35,7 +35,7 @@ export const projects: Project[] = [
     preview: {
       kind: "video",
       src: "/projects/pokyh.mp4",
-      poster: "/showcase/pokyh.png",
+      poster: "/showcase/pokyh.webp",
     },
   },
   {
@@ -101,7 +101,7 @@ export const projects: Project[] = [
     preview: {
       kind: "video",
       src: "/projects/magicmirror.mp4",
-      poster: "/showcase/magic-mirror.png",
+      poster: "/showcase/magic-mirror.webp",
     },
   },
   {
@@ -117,7 +117,7 @@ export const projects: Project[] = [
     preview: {
       kind: "video",
       src: "/projects/minesweeper.mp4",
-      poster: "/showcase/minesweeper.png",
+      poster: "/showcase/minesweeper.webp",
     },
   },
   {
@@ -134,7 +134,7 @@ export const projects: Project[] = [
       /* both in-game takes in one seamless loop, crossfading between them */
       kind: "video",
       src: "/projects/projectile_preview.mp4",
-      poster: "/showcase/projectilepreview-mod.png",
+      poster: "/showcase/projectilepreview-mod.webp",
     },
   },
 ];
