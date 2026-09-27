@@ -13,13 +13,16 @@ const HOP = 56;
 type Point = { x: number; y: number; scale: number };
 type Pose = Point & { hop: number };
 
-/** Flight time grows with the distance, the way a real leap would. */
+/** Glide time grows with the distance, so a short hop and a leap across the
+    whole screen both read at the same pace. */
 const flightTime = (from: Point, to: Point) =>
-  gsap.utils.clamp(0.55, 0.9, 0.42 + Math.hypot(to.x - from.x, to.y - from.y) / 1400);
+  gsap.utils.clamp(0.75, 1.25, 0.55 + Math.hypot(to.x - from.x, to.y - from.y) / 1500);
+/** How far (deg) he leans into the direction he is gliding. */
+const LEAN = 16;
 
 /**
- * A ballistic arc from `from` to `to`: x moves at a constant rate while the
- * height follows a parabola, like anything that is thrown. `k` is solved so
+ * An arc from `from` to `to`: x moves in step with the flight while the
+ * height follows a parabola over it. `k` is solved so
  * the apex sits exactly `rise` px above the higher of the two ends:
  * height(p) = h0·(1-p) + h1·p + 4k·p·(1-p) peaks at h0 + (a + 4k)² / 16k
  * (a = h1 - h0); setting that to max(h0, h1) + rise and taking the root that
@@ -39,9 +42,10 @@ function arc(from: Point, to: Point, rise: number) {
 }
 
 /**
- * Clawd's leap between his corner (ClawdPet) and the GitHub mark at the end of
- * the project row: a crouch, a stretched take-off, a thrown arc with a front
- * flip, a squash on landing that the mark dips under, and back the same way.
+ * Clawd's glide between his corner (ClawdPet) and the GitHub mark at the end
+ * of the project row: a crouch, a stretched take-off, a soft arc he leans
+ * into, a squash on landing that the mark dips under, and home the same way —
+ * both when the row rolls back and when the page scrolls on past it.
  * The two copies of him hand over on the exact spot and frame, so it reads as
  * one Clawd jumping across the screen.
  */
@@ -53,6 +57,10 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
   const setX = gsap.quickSetter(perch, "x", "px");
   const setY = gsap.quickSetter(perch, "y", "px");
   const setScale = gsap.quickSetter(perch, "scale");
+  const setLean = spin ? gsap.quickSetter(spin, "rotation", "deg") : null;
+  /* ClawdPet keeps the corner copy away for as long as he is in the air */
+  const flying = (on: boolean) =>
+    document.documentElement.toggleAttribute("data-clawd-flying", on);
   let timeline: gsap.core.Timeline | null = null;
 
   const showClip = (clip: "fly" | "sit") => {
@@ -104,45 +112,42 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
     }
   };
 
-  /** the arc itself, plus one front flip leaning into the direction of travel */
-  const leap = (tl: gsap.core.Timeline, from: Point, to: Point, rise: number) => {
-    const path = arc(from, to, rise);
-    const time = flightTime(from, to);
+  /** The glide: a soft arc eased in and out, leaning forward into the
+      direction of travel and straightening up as he arrives. `target` is read
+      every frame, so a destination that moves while he is in the air (the
+      corner, while the page scrolls on) is still where he lands. */
+  const leap = (
+    tl: gsap.core.Timeline,
+    from: Point,
+    target: () => Point | null,
+    rise: number,
+  ) => {
+    const first = target();
+    if (!first) return;
+    const time = flightTime(from, first);
+    const lean = (first.x < from.x ? -1 : 1) * LEAN;
     const proxy = { p: 0 };
     tl.to(
       proxy,
       {
         p: 1,
         duration: time,
-        ease: "none",
+        ease: "sine.inOut",
         onUpdate: () => {
-          const point = path(proxy.p);
+          const point = arc(from, target() ?? first, rise)(proxy.p);
           setX(point.x);
           setY(point.y);
           setScale(point.scale);
+          setLean?.(lean * Math.sin(Math.PI * proxy.p));
         },
       },
       "launch",
     );
-    if (spin) {
-      tl.fromTo(
-        spin,
-        { rotation: 0 },
-        {
-          rotation: to.x < from.x ? -360 : 360,
-          duration: time * 0.9,
-          ease: "power1.inOut",
-          immediateRender: false,
-        },
-        `launch+=${time * 0.04}`,
-      );
-    }
     tl.addLabel("arrive", `launch+=${time}`);
   };
 
   /** squash on touch-down and wobble back; the mark gives a little under him */
   const touchDown = (tl: gsap.core.Timeline) => {
-    if (spin) tl.set(spin, { rotation: 0 }, "arrive");
     if (squash) {
       tl.to(squash, { scaleX: 1.32, scaleY: 0.68, duration: 0.08, ease: "power2.out" }, "arrive").to(
         squash,
@@ -163,16 +168,17 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
 
   const rest: Point = { x: 0, y: 0, scale: 1 };
 
-  /** Jump from the corner onto the mark. */
+  /** Glide from wherever the corner Clawd is onto the mark. */
   const land = () => {
     timeline?.kill();
     const corner = cornerPose();
-    const tl = gsap.timeline();
+    const tl = gsap.timeline({ onComplete: () => flying(false) });
     timeline = tl;
     showClip("fly");
+    flying(true);
 
     if (!corner) {
-      /* nobody in the corner to jump from: drop in from above instead */
+      /* nobody in the corner to glide from: drop in from above instead */
       reset();
       tl.set(perch, { x: 0, y: -150, scale: 1, autoAlpha: 0 })
         .to(perch, { autoAlpha: 1, duration: 0.1, ease: "none" })
@@ -183,7 +189,7 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
       return;
     }
 
-    /* already mid-air on the way back (a scroll reversal) — turn around
+    /* already in the air on the way back (a scroll reversal) — turn around
        where he is instead of snapping back to the corner first */
     const airborne = Number(gsap.getProperty(perch, "autoAlpha")) > 0.5;
     let from: Point = corner;
@@ -195,16 +201,21 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
       tl.set(perch, { x: corner.x, y: corner.y, scale: corner.scale, autoAlpha: 1 });
       takeOff(tl);
     }
-    leap(tl, from, rest, airborne ? 16 : corner.hop);
+    leap(tl, from, () => rest, airborne ? 16 : corner.hop);
     touchDown(tl);
   };
 
-  /** Jump from the mark back to the corner; `arrived` fires on the frame he
+  /** Glide from the mark back to the corner; `arrived` fires on the frame he
       gets there, which is when the corner copy takes over. */
   const leave = (arrived: () => void) => {
     timeline?.kill();
     const corner = cornerPose();
-    const tl = gsap.timeline({ onComplete: arrived });
+    const tl = gsap.timeline({
+      onComplete: () => {
+        flying(false);
+        arrived();
+      },
+    });
     timeline = tl;
     showClip("fly");
 
@@ -214,10 +225,13 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
       return;
     }
 
-    takeOff(tl);
+    flying(true);
+    const airborne = Number(gsap.getProperty(perch, "autoAlpha")) > 0.5;
+    if (airborne) tl.addLabel("launch");
+    else takeOff(tl);
     /* a flatter arc on the way up: the apex is above the corner here, right
-       under the top edge, and the flip swings his corners out further */
-    leap(tl, current(), corner, corner.hop * 0.4);
+       under the top edge of the screen */
+    leap(tl, current(), cornerPose, corner.hop * 0.4);
     tl.set(perch, { autoAlpha: 0 }, "arrive").call(reset, undefined, "arrive");
   };
 
@@ -225,13 +239,17 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
   const settle = (perched: boolean) => {
     timeline?.kill();
     timeline = null;
+    flying(false);
     reset();
     if (disc) gsap.set(disc, { y: 0 });
     gsap.set(perch, { x: 0, y: 0, scale: 1, autoAlpha: perched ? 1 : 0 });
     showClip("sit");
   };
 
-  const kill = () => timeline?.kill();
+  const kill = () => {
+    timeline?.kill();
+    flying(false);
+  };
 
   return { land, leave, settle, kill };
 }

@@ -711,7 +711,7 @@ main {
   max-width: 32rem;
 }
 
-/* "03 / 06" and a bar that fills with the row — desktop pin only */
+/* "03 / 07", rolling to the card you are on — desktop pin only */
 .showcase-progress {
   display: none;
   align-items: center;
@@ -752,22 +752,6 @@ main {
   color: rgba(242, 237, 230, 0.45);
 }
 
-.sp-bar {
-  position: relative;
-  flex: 1;
-  height: 2px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: rgba(242, 237, 230, 0.14);
-}
-
-.sp-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left center;
-}
 
 .showcase-track {
   display: flex;

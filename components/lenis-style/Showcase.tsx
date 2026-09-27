@@ -72,8 +72,6 @@ export default function Showcase() {
         const cards = gsap.utils.toArray<HTMLElement>(".showcase-card", section);
         const media = cards.map((card) => card.querySelector<HTMLElement>(".sc-media"));
         const setMedia = media.map((el) => (el ? gsap.quickSetter(el, "xPercent") : null));
-        const fill = section.querySelector<HTMLElement>(".sp-fill");
-        const setFill = fill ? gsap.quickSetter(fill, "scaleX") : null;
         const current = section.querySelector<HTMLElement>(".sp-current");
         let travel = distance();
         let radius = 1;
@@ -107,6 +105,9 @@ export default function Showcase() {
           window.dispatchEvent(new Event("clawd-perch"));
         };
         let perched: boolean | null = null;
+        /* scrolled on past the row: he glides home to his corner, and back
+           onto the mark if you come back up */
+        let pastEnd = false;
         const setPerched = (next: boolean, instant: boolean) => {
           if (next === perched) return;
           perched = next;
@@ -140,7 +141,6 @@ export default function Showcase() {
         const syncMark = (instant = false) => {
           const x = Number(gsap.getProperty(track, "x"));
           const remaining = Math.max(0, x + travel);
-          setFill?.(travel > 0 ? 1 - remaining / travel : 1);
 
           /* each clip drifts against its card's travel, a few percent of its
              own width, so the footage sits a little deeper than its frame */
@@ -160,7 +160,8 @@ export default function Showcase() {
           /* on at the resting spot, off only once the mark is clearly rolling
              away again — scrub smoothing creeps, and he must not hop on and
              off over a few pixels */
-          if (remaining <= PERCH_SLACK) setPerched(true, instant);
+          if (pastEnd) setPerched(false, instant);
+          else if (remaining <= PERCH_SLACK) setPerched(true, instant);
           else if (remaining > PERCH_SLACK * 6 || perched === null) setPerched(false, instant);
         };
 
@@ -177,7 +178,18 @@ export default function Showcase() {
               end: "bottom bottom",
               scrub: 1,
               invalidateOnRefresh: true,
-              onRefresh: () => syncMark(true),
+              onRefresh: (self) => {
+                pastEnd = self.scroll() > self.end;
+                syncMark(true);
+              },
+              onLeave: () => {
+                pastEnd = true;
+                syncMark();
+              },
+              onEnterBack: () => {
+                pastEnd = false;
+                syncMark();
+              },
               /* the cards lean into a fast scroll and straighten up again */
               onUpdate: (self) => {
                 const moving = self.progress < TRAVEL_SHARE;
@@ -234,7 +246,7 @@ export default function Showcase() {
           gsap.killTweensOf(lean);
           /* quickSetter writes aren't part of the context, so clear them by
              hand before the mobile layout takes over these elements */
-          [...cards, ...media, disc, fill].forEach((el) => el?.style.removeProperty("transform"));
+          [...cards, ...media, disc].forEach((el) => el?.style.removeProperty("transform"));
           if (current) current.textContent = "01";
         };
       });
@@ -308,9 +320,6 @@ export default function Showcase() {
                   <span className="sp-current">01</span>
                 </span>
                 <span className="sp-total">/ {String(projects.length).padStart(2, "0")}</span>
-              </span>
-              <span className="sp-bar">
-                <span className="sp-fill" />
               </span>
             </div>
           </div>

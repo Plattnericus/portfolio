@@ -162,13 +162,16 @@ export default function ClawdPet() {
       heroHidden = heroHide;
 
       let perched = false;
-      if (perchEl && document.documentElement.hasAttribute("data-clawd-perched")) {
+      const html = document.documentElement;
+      if (perchEl && html.hasAttribute("data-clawd-perched")) {
         const rect = perchEl.getBoundingClientRect();
         perched =
-          rect.bottom > 0 &&
-          rect.top < window.innerHeight &&
-          rect.right > 0 &&
-          rect.left < window.innerWidth;
+          /* mid-glide he is the flying copy, wherever the mark has gone */
+          html.hasAttribute("data-clawd-flying") ||
+          (rect.bottom > 0 &&
+            rect.top < window.innerHeight &&
+            rect.right > 0 &&
+            rect.left < window.innerWidth);
       }
 
       const shouldHide = heroHide || perched;
