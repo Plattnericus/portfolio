@@ -93,34 +93,21 @@ export default function Showcase() {
 
         /* The GitHub mark rolls in like a wheel: its turn is exactly the
            distance it still has to travel over its own radius, so it comes to
-           rest upright on the very frame the row stops — then Clawd hops off
-           the corner and lands on top of it. */
+           rest upright on the very frame the row stops — then Clawd glides
+           over from his corner and sits down on it. */
         const setRoll = disc ? gsap.quickSetter(disc, "rotation", "deg") : null;
-        /* ClawdPet reads this attribute to step out of (and back into) his
-           corner, so there is only ever one of him on screen */
-        const announce = (onMark: boolean) => {
-          document.documentElement.toggleAttribute("data-clawd-perched", onMark);
-          window.dispatchEvent(new Event("clawd-perch"));
-        };
         let perched: boolean | null = null;
         /* scrolled on past the row: he glides home to his corner, and back
            onto the mark if you come back up */
         let pastEnd = false;
-        const setPerched = (next: boolean, instant: boolean) => {
+        const setPerched = (next: boolean, instant: boolean, remaining = 0) => {
           if (next === perched) return;
           perched = next;
-          if (instant || !jump) {
-            announce(next);
-            jump?.settle(next);
-          } else if (next) {
-            announce(true);
-            jump.land();
-          } else {
-            /* the corner copy only comes back once he has actually got there */
-            jump.leave(() => announce(false));
-          }
+          if (!jump) return;
+          if (instant) jump.settle(next);
+          else if (next) jump.land(remaining);
+          else jump.leave();
         };
-        jump?.settle(false);
 
         const syncMark = (instant = false) => {
           const x = Number(gsap.getProperty(track, "x"));
@@ -138,7 +125,7 @@ export default function Showcase() {
              away again — scrub smoothing creeps, and he must not hop on and
              off over a few pixels */
           if (pastEnd) setPerched(false, instant);
-          else if (remaining <= PERCH_SLACK) setPerched(true, instant);
+          else if (remaining <= PERCH_SLACK) setPerched(true, instant, remaining);
           else if (remaining > PERCH_SLACK * 6 || perched === null) setPerched(false, instant);
         };
 
@@ -201,7 +188,6 @@ export default function Showcase() {
           section.removeEventListener("focusin", onFocusIn);
           section.style.removeProperty("height");
           jump?.destroy();
-          announce(false);
           /* quickSetter writes aren't part of the context, so clear them by
              hand before the mobile layout takes over these elements */
           [...media, disc].forEach((el) => el?.style.removeProperty("transform"));

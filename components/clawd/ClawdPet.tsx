@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MM_DESKTOP, gsap, ScrollTrigger, useGSAP } from "@/lib/animation";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
+import type { PerchPhase } from "./perchJump";
 import {
   CLAWD_SPRITES,
   CLICK_REACTIONS,
@@ -14,7 +15,16 @@ import {
 
 /* Priorities: a state may only be replaced by an equal-or-higher one,
    or by anything once it expires. */
-const PRIORITY: Record<string, number> = { idle: 0, flavor: 1, section: 2, velocity: 3, click: 4 };
+const PRIORITY: Record<string, number> = {
+  idle: 0,
+  flavor: 1,
+  section: 2,
+  velocity: 3,
+  /* flying to or sitting on the GitHub mark (perchJump.ts) — only a click
+     reaction may interrupt it */
+  perch: 3.5,
+  click: 4,
+};
 
 type PetState = {
   clip: ClawdClip;
@@ -24,6 +34,9 @@ type PetState = {
 };
 
 const IDLE_STATE: PetState = { clip: "IDLE", kind: "idle", until: Infinity };
+/* in the air he is his calm idle self; on the mark he opens his laptop */
+const FLY_STATE: PetState = { clip: "IDLE", kind: "perch", until: Infinity };
+const SIT_STATE: PetState = { clip: "TYPING", kind: "perch", until: Infinity };
 
 /** Loads the idle sprite (calls onReady once it can paint, or after a hard
     timeout) and warms the other clips off the critical path; returns a
@@ -91,6 +104,10 @@ export default function ClawdPet() {
   const [ready, setReady] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
+  /* what he falls back to once a reaction is over: idle, or typing while he
+     sits on the GitHub mark */
+  const baseRef = useRef<PetState>(IDLE_STATE);
+  const phaseRef = useRef<PerchPhase>("home");
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -147,11 +164,6 @@ export default function ClawdPet() {
        mid-scroll. A getBoundingClientRect read is always truthful, so the
        visibility self-heals on the very next tick and can never get stuck. */
     const heroEl = document.querySelector(".hero");
-    /* the GitHub mark at the end of the showcase row — while Clawd has
-       landed on it (Showcase.tsx sets data-clawd-perched) and it is on
-       screen, the corner copy of him steps out, so there is only ever one */
-    const perchEl = document.querySelector("[data-clawd-perch]");
-    let heroHidden: boolean | null = null;
     let hidden: boolean | null = null;
     const syncHero = (instant = false) => {
       const root = rootRef.current;
@@ -159,62 +171,40 @@ export default function ClawdPet() {
       const bottom = heroEl.getBoundingClientRect().bottom;
       /* Hysteresis dead-zone around the boundary: a scroll that settles right on
          the hero edge can't strobe Clawd's fade in and out. */
-      let heroHide = heroHidden ?? bottom > 0;
-      if (bottom > 8) heroHide = true;
-      else if (bottom < -8) heroHide = false;
-      heroHidden = heroHide;
-
-      let perched = false;
-      const html = document.documentElement;
-      if (perchEl && html.hasAttribute("data-clawd-perched")) {
-        const rect = perchEl.getBoundingClientRect();
-        perched =
-          /* mid-glide he is the flying copy, wherever the mark has gone */
-          html.hasAttribute("data-clawd-flying") ||
-          (rect.bottom > 0 &&
-            rect.top < window.innerHeight &&
-            rect.right > 0 &&
-            rect.left < window.innerWidth);
-      }
-
-      const shouldHide = heroHide || perched;
+      let shouldHide = hidden ?? bottom > 0;
+      if (bottom > 8) shouldHide = true;
+      else if (bottom < -8) shouldHide = false;
       if (shouldHide === hidden) return;
-      const wasPerched = hidden === true && !heroHide;
       hidden = shouldHide;
-      if (instant) {
-        /* overwrite: a fade still running from the last poll must not
-           carry on and undo this */
-        gsap.set(root, { autoAlpha: shouldHide ? 0 : 1, scale: 1, overwrite: true });
-        /* back from the mark: the flying copy just touched down on this exact
-           spot, so this one picks the landing up with the same squash */
-        const img = root.querySelector("img");
-        if (!shouldHide && wasPerched && img) {
-          /* baked into keyframes so it runs on the compositor, like the
-             flight that just ended here (perchJump.ts) */
-          const wobble = gsap.parseEase("elastic.out(1, 0.32)");
-          img.animate(
-            Array.from({ length: 41 }, (_, i) => {
-              const t = wobble(i / 40);
-              return { transform: `scale(${1.3 - 0.3 * t}, ${0.7 + 0.3 * t})` };
-            }),
-            { duration: 800, easing: "linear", fill: "none" },
-          );
-        }
-      } else {
+      /* overwrite: a fade still running from the last poll must not carry on
+         and undo this */
+      if (instant) gsap.set(root, { autoAlpha: shouldHide ? 0 : 1, overwrite: true });
+      else
         gsap.to(root, {
           autoAlpha: shouldHide ? 0 : 1,
-          scale: 1,
           duration: 0.35,
           ease: "power2.out",
           overwrite: true,
         });
-      }
     };
     syncHero(true);
-    /* the hand-over to and from the perch is frame-exact (the other copy
-       appears or vanishes on the same spot), so it must not fade */
-    const onPerch = () => syncHero(true);
+
+    /* the flight to and from the GitHub mark (perchJump.ts) moves this very
+       element; here he only changes clip, and can't be dragged off mid-way */
+    const onPerch = (event: Event) => {
+      const next = (event as CustomEvent<PerchPhase>).detail;
+      phaseRef.current = next;
+      rootRef.current?.classList.toggle("is-flying", next === "fly");
+      rootRef.current?.classList.toggle("is-perched", next === "sit");
+      const base = next === "fly" ? FLY_STATE : next === "sit" ? SIT_STATE : IDLE_STATE;
+      baseRef.current = next === "sit" ? SIT_STATE : IDLE_STATE;
+      stateRef.current = base;
+      setState(base);
+    };
     window.addEventListener("clawd-perch", onPerch);
+    /* tells the row he is in his corner now, in case it is already waiting
+       for him at its end */
+    window.dispatchEvent(new Event("clawd-ready"));
 
     /* fast scrolling → a random work clip per burst (IDLE stays the baseline) */
     let velocityStart = 0;
@@ -268,7 +258,7 @@ export default function ClawdPet() {
     const expiry = window.setInterval(() => {
       const current = stateRef.current;
       if (current.kind !== "idle" && performance.now() > current.until) {
-        setState(IDLE_STATE);
+        setState(baseRef.current);
       }
     }, 500);
 
@@ -363,6 +353,8 @@ export default function ClawdPet() {
     const root = rootRef.current;
     if (!root) return;
     dragMoved.current = false;
+    /* on the mark he stays put — a click still gets a reaction */
+    if (phaseRef.current !== "home") return;
     const rect = root.getBoundingClientRect();
     const offsetX = event.clientX - rect.left;
     const offsetY = event.clientY - rect.top;

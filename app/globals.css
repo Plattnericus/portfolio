@@ -1080,41 +1080,6 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   filter: drop-shadow(0 8px 18px rgba(11, 9, 8, 0.45));
 }
 
-/* the copy of him that does the flying, between his corner and the mark
-   (perchJump.ts): fixed, so the pin never clips it, and animated on the
-   compositor. It pivots on his feet like the perched copy. */
-.clawd-flyer {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 199;
-  visibility: hidden;
-  pointer-events: none;
-  line-height: 0;
-  transform-origin: 50% 76%;
-  will-change: transform;
-}
-
-.clawd-flyer-spin,
-.clawd-flyer-squash {
-  display: block;
-}
-
-.clawd-flyer-spin {
-  transform-origin: 50% 51%;
-}
-
-.clawd-flyer-squash {
-  transform-origin: 50% 76%;
-}
-
-.clawd-flyer img {
-  display: block;
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 8px 18px rgba(11, 9, 8, 0.45));
-}
-
 /* he flies in idle and types once seated; without JS he is simply seated */
 .endcap-clawd-fly {
   visibility: hidden;
@@ -1125,6 +1090,8 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
     scale: 1.035;
   }
 
+  /* the real Clawd sitting on the mark hops along with the hover */
+  body:has(.endcap-link:hover, .endcap-mark:hover) .clawd-pet.is-perched .clawd-sprite img,
   .endcap-row:has(.endcap-link:hover, .endcap-mark:hover) .endcap-clawd img {
     animation: clawd-hop 0.55s cubic-bezier(0.3, 0, 0.3, 1);
   }
@@ -1686,6 +1653,8 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 
 .clawd-sprite {
   pointer-events: auto;
+  /* the lean of a flight turns about his middle (perchJump.ts) */
+  transform-origin: 50% 51%;
   border: 0;
   padding: 0;
   background: transparent;
@@ -1697,6 +1666,16 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 
 .clawd-sprite:active {
   cursor: grabbing;
+}
+
+/* mid-flight he can't be grabbed or clicked; seated on the mark he can be
+   clicked for a reaction but not dragged off it */
+.clawd-pet.is-flying .clawd-sprite {
+  pointer-events: none;
+}
+
+.clawd-pet.is-perched .clawd-sprite {
+  cursor: pointer;
 }
 
 .clawd-sprite:hover {
