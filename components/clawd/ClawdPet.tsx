@@ -234,22 +234,36 @@ export default function ClawdPet() {
     };
     const scrollInterval = window.setInterval(onScroll, 200);
 
-    /* section context via ScrollTrigger, same pattern as DynamicFavicon */
-    const triggers = SECTION_CLIPS.flatMap(({ selector, clip }) => {
+    /* section context via ScrollTrigger, same pattern as DynamicFavicon —
+       the line (if any) only the first time, so it never nags */
+    const triggers = SECTION_CLIPS.flatMap(({ selector, clip, line }) => {
       const el = document.querySelector(selector);
       if (!el) return [];
+      let said = false;
+      const enter = () => {
+        const bubble = line && !said ? line : undefined;
+        if (bubble) said = true;
+        propose({ clip, kind: "section", until: performance.now() + 4000, bubble });
+      };
       return [
         ScrollTrigger.create({
           trigger: el,
           start: "top 60%",
           end: "bottom 40%",
-          onEnter: () =>
-            propose({ clip, kind: "section", until: performance.now() + 4000 }),
-          onEnterBack: () =>
-            propose({ clip, kind: "section", until: performance.now() + 4000 }),
+          onEnter: enter,
+          onEnterBack: enter,
         }),
       ];
     });
+
+    /* other parts of the page can make him say something (the footer's
+       copy-email button does) */
+    const onSay = (event: Event) => {
+      const detail = (event as CustomEvent<{ clip: ClawdClip; line: string }>).detail;
+      if (!detail) return;
+      propose({ clip: detail.clip, kind: "click", until: performance.now() + 2800, bubble: detail.line });
+    };
+    window.addEventListener("clawd-say", onSay);
 
     /* fall back to IDLE whenever the active state expires */
     const expiry = window.setInterval(() => {
@@ -260,6 +274,7 @@ export default function ClawdPet() {
     }, 500);
 
     return () => {
+      window.removeEventListener("clawd-say", onSay);
       window.removeEventListener("clawd-perch", onPerch);
       window.clearTimeout(flavorTimer);
       window.clearInterval(scrollInterval);
@@ -391,10 +406,16 @@ export default function ClawdPet() {
     window.addEventListener("pointerup", onUp);
   };
 
+  const lastReaction = useRef(-1);
   const onClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (dragMoved.current) return; // a drag is not a click
     event.currentTarget.blur();
-    const reaction = CLICK_REACTIONS[Math.floor(Math.random() * CLICK_REACTIONS.length)];
+    /* never the same one twice in a row */
+    const first = lastReaction.current < 0;
+    let pick = Math.floor(Math.random() * (CLICK_REACTIONS.length - (first ? 0 : 1)));
+    if (!first && pick >= lastReaction.current) pick += 1;
+    lastReaction.current = pick;
+    const reaction = CLICK_REACTIONS[pick];
     proposeRef.current({
       clip: reaction.clip,
       kind: "click",

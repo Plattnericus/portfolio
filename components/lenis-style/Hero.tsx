@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { ArrowDown, Code } from "lucide-react";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
 import NexorWordmark from "@/components/brand/NexorWordmark";
+import LocalTime from "@/components/ui/LocalTime";
 import PillInner from "@/components/ui/PillInner";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
 import { siteConfig } from "@/lib/site";
@@ -222,6 +223,10 @@ export default function Hero() {
           <a href={siteConfig.github} target="_blank" rel="noreferrer">
             Nexor / Plattnericus
           </a>
+          <span className="hero-status">
+            <span className="status-dot" aria-hidden="true" />
+            Open to projects · <LocalTime /> in South Tyrol
+          </span>
         </p>
         <div className="hero-actions">
           <a className="pill" href={siteConfig.github} target="_blank" rel="noreferrer">

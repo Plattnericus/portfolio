@@ -61,11 +61,18 @@ export const CLICK_REACTIONS: Array<{ clip: ClawdClip; line: string }> = [
   { clip: "DEBUGGING", line: "Found the bug. It was me." },
   { clip: "SUBAGENTS", line: "Delegating this click…" },
   { clip: "ERROR_RETRY", line: "Retrying…" },
+  { clip: "TYPING", line: "Shipping a fix…" },
+  { clip: "BUILDING", line: "npm run build" },
+  { clip: "TESTING", line: "All green." },
+  { clip: "THINKING", line: "Hmm…" },
+  { clip: "COMPLETE", line: "Deployed!" },
+  { clip: "READING_FILES", line: "Reading the docs. Finally." },
 ];
 
-/** Section class → clip Clawd reacts with while that section is on screen. */
-export const SECTION_CLIPS: Array<{ selector: string; clip: ClawdClip }> = [
-  { selector: ".showcase", clip: "READING_FILES" },
+/** Section class → clip Clawd reacts with while that section is on screen,
+    and a line he says the first time you get there. */
+export const SECTION_CLIPS: Array<{ selector: string; clip: ClawdClip; line?: string }> = [
+  { selector: ".showcase", clip: "READING_FILES", line: "All of these are live." },
   { selector: ".heat", clip: "BUILDING" },
-  { selector: ".footer-giant", clip: "COMPLETE" },
+  { selector: ".footer-giant", clip: "COMPLETE", line: "That's everything. Say hi!" },
 ];
