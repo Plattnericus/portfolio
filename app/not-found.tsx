@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Code } from "lucide-react";
 import CursorGlow from "@/components/motion/CursorGlow";
+import PillInner from "@/components/ui/PillInner";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
 import { CLAWD_SPRITES } from "@/lib/clawd";
 import { siteConfig } from "@/lib/site";
@@ -91,16 +92,10 @@ export default function NotFound() {
 
         <div className="nf-actions nf-rise">
           <Link className="pill" href="/">
-            <span className="pill-icon">
-              <ArrowLeft aria-hidden="true" />
-            </span>
-            <span className="pill-label">Back to Nexor</span>
+            <PillInner icon={ArrowLeft} label="Back to Nexor" roll="left" />
           </Link>
           <a className="pill" href={siteConfig.github} target="_blank" rel="noreferrer">
-            <span className="pill-icon">
-              <Code aria-hidden="true" />
-            </span>
-            <span className="pill-label">GitHub</span>
+            <PillInner icon={Code} label="GitHub" />
           </a>
         </div>
       </div>

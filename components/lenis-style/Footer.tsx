@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { Heart } from "lucide-react";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
+import PillInner from "@/components/ui/PillInner";
 import { siteConfig } from "@/lib/site";
 
 export default function Footer() {
@@ -53,10 +54,7 @@ export default function Footer() {
 
       <div className="fx-cta-row">
         <a className="pill" href={`mailto:${siteConfig.email}`}>
-          <span className="pill-icon">
-            <Heart aria-hidden="true" />
-          </span>
-          <span className="pill-label">Get in touch</span>
+          <PillInner icon={Heart} label="Get in touch" />
         </a>
 
         <nav className="fx-links" aria-label="Profiles">

@@ -169,7 +169,9 @@ main {
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
-  transition: filter 0.25s ease;
+  transition:
+    filter 0.25s ease,
+    scale 0.2s ease;
 }
 
 .pill:hover {
@@ -196,9 +198,116 @@ main {
   box-shadow: inset 0 0 0 3px var(--button-accent);
 }
 
-.pill-icon svg {
+/* two copies of the icon on one spot: on hover the first is pushed out of
+   the cell while the second slides into its place (PillInner.tsx) */
+.pill-icon {
+  overflow: hidden;
+}
+
+.pill-icon-track {
+  display: grid;
   width: 20px;
   height: 20px;
+}
+
+.pill-icon svg {
+  grid-area: 1 / 1;
+  width: 20px;
+  height: 20px;
+  transition: transform 0.6s var(--ease-out-expo);
+}
+
+.pill-icon--up svg:last-child {
+  transform: translateY(170%);
+}
+
+.pill-icon--diag svg:last-child {
+  transform: translate(-170%, 170%);
+}
+
+.pill-icon--left svg:last-child {
+  transform: translateX(170%);
+}
+
+@media (hover: hover) {
+  .pill:hover .pill-icon svg:last-child {
+    transform: none;
+  }
+
+  .pill:hover .pill-icon--up svg:first-child {
+    transform: translateY(-170%);
+  }
+
+  .pill:hover .pill-icon--diag svg:first-child {
+    transform: translate(170%, -170%);
+  }
+
+  .pill:hover .pill-icon--left svg:first-child {
+    transform: translateX(-170%);
+  }
+}
+
+.pill:active {
+  scale: 0.97;
+}
+
+/* Letter roll (RollText.tsx): both rows share one grid cell; the hover of
+   the nearest link/button sends every letter of the first row up and pulls
+   the second row's letters in behind them, one letter after another */
+.roll {
+  position: relative;
+  display: inline-grid;
+  overflow: hidden;
+  vertical-align: top;
+  /* room for the glyphs' full height inside the clip */
+  padding-block: 0.12em;
+  margin-block: -0.12em;
+}
+
+.roll-row {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  white-space: pre;
+}
+
+.roll-row--next {
+  justify-content: center;
+}
+
+.roll-char {
+  display: inline-block;
+  transition: transform 0.55s var(--ease-out-expo);
+  transition-delay: calc(var(--i) * 16ms);
+}
+
+.roll-row--next .roll-char {
+  transform: translateY(130%);
+}
+
+@media (hover: hover) {
+  :is(a, button):hover .roll-row:not(.roll-row--next) .roll-char {
+    transform: translateY(-130%);
+  }
+
+  :is(a, button):hover .roll-row--next .roll-char {
+    transform: none;
+  }
+}
+
+/* the copy-email button rolls on its own state instead of on hover */
+.is-swapped .roll-row:not(.roll-row--next) .roll-char {
+  transform: translateY(-130%) !important;
+}
+
+.is-swapped .roll-row--next .roll-char {
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roll-char,
+  .pill-icon svg {
+    transition: none;
+  }
 }
 
 .pill-label {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowUpRight, Code } from "lucide-react";
+import { ArrowDown, Code } from "lucide-react";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
 import NexorWordmark from "@/components/brand/NexorWordmark";
+import PillInner from "@/components/ui/PillInner";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
 import { siteConfig } from "@/lib/site";
 
@@ -224,16 +225,10 @@ export default function Hero() {
         </p>
         <div className="hero-actions">
           <a className="pill" href={siteConfig.github} target="_blank" rel="noreferrer">
-            <span className="pill-icon">
-              <Code aria-hidden="true" />
-            </span>
-            <span className="pill-label">GitHub</span>
+            <PillInner icon={Code} label="GitHub" />
           </a>
           <a className="pill" href="#work" onClick={scrollToProjects}>
-            <span className="pill-icon">
-              <ArrowUpRight aria-hidden="true" />
-            </span>
-            <span className="pill-label">Projects</span>
+            <PillInner icon={ArrowDown} label="Projects" />
           </a>
         </div>
       </div>
