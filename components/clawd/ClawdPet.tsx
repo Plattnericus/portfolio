@@ -144,22 +144,52 @@ export default function ClawdPet() {
        mid-scroll. A getBoundingClientRect read is always truthful, so the
        visibility self-heals on the very next tick and can never get stuck. */
     const heroEl = document.querySelector(".hero");
+    /* the GitHub mark at the end of the showcase row — while Clawd has
+       landed on it (Showcase.tsx sets data-clawd-perched) and it is on
+       screen, the corner copy of him steps out, so there is only ever one */
+    const perchEl = document.querySelector("[data-clawd-perch]");
     let heroHidden: boolean | null = null;
+    let hidden: boolean | null = null;
     const syncHero = (instant = false) => {
       const root = rootRef.current;
       if (!root || !heroEl) return;
       const bottom = heroEl.getBoundingClientRect().bottom;
       /* Hysteresis dead-zone around the boundary: a scroll that settles right on
          the hero edge can't strobe Clawd's fade in and out. */
-      let shouldHide = heroHidden ?? bottom > 0;
-      if (bottom > 8) shouldHide = true;
-      else if (bottom < -8) shouldHide = false;
-      if (shouldHide === heroHidden) return;
-      heroHidden = shouldHide;
-      if (instant) gsap.set(root, { autoAlpha: shouldHide ? 0 : 1 });
-      else gsap.to(root, { autoAlpha: shouldHide ? 0 : 1, duration: 0.35, overwrite: true });
+      let heroHide = heroHidden ?? bottom > 0;
+      if (bottom > 8) heroHide = true;
+      else if (bottom < -8) heroHide = false;
+      heroHidden = heroHide;
+
+      let perched = false;
+      if (perchEl && document.documentElement.hasAttribute("data-clawd-perched")) {
+        const rect = perchEl.getBoundingClientRect();
+        perched =
+          rect.bottom > 0 &&
+          rect.top < window.innerHeight &&
+          rect.right > 0 &&
+          rect.left < window.innerWidth;
+      }
+
+      const shouldHide = heroHide || perched;
+      if (shouldHide === hidden) return;
+      hidden = shouldHide;
+      if (instant) gsap.set(root, { autoAlpha: shouldHide ? 0 : 1, scale: 1 });
+      else if (perched)
+        /* a quick hop up and out — he is on his way to the mark */
+        gsap.to(root, { autoAlpha: 0, scale: 0.7, duration: 0.22, ease: "power2.in", overwrite: true });
+      else
+        gsap.to(root, {
+          autoAlpha: shouldHide ? 0 : 1,
+          scale: 1,
+          duration: 0.35,
+          ease: "power2.out",
+          overwrite: true,
+        });
     };
     syncHero(true);
+    const onPerch = () => syncHero();
+    window.addEventListener("clawd-perch", onPerch);
 
     /* fast scrolling → a random work clip per burst (IDLE stays the baseline) */
     let velocityStart = 0;
@@ -213,6 +243,7 @@ export default function ClawdPet() {
     }, 500);
 
     return () => {
+      window.removeEventListener("clawd-perch", onPerch);
       window.clearTimeout(flavorTimer);
       window.clearInterval(scrollInterval);
       window.clearInterval(expiry);
