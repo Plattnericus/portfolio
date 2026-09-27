@@ -173,12 +173,23 @@ export default function ClawdPet() {
 
       const shouldHide = heroHide || perched;
       if (shouldHide === hidden) return;
+      const wasPerched = hidden === true && !heroHide;
       hidden = shouldHide;
-      if (instant) gsap.set(root, { autoAlpha: shouldHide ? 0 : 1, scale: 1 });
-      else if (perched)
-        /* a quick hop up and out — he is on his way to the mark */
-        gsap.to(root, { autoAlpha: 0, scale: 0.7, duration: 0.22, ease: "power2.in", overwrite: true });
-      else
+      if (instant) {
+        /* overwrite: a fade still running from the last poll must not
+           carry on and undo this */
+        gsap.set(root, { autoAlpha: shouldHide ? 0 : 1, scale: 1, overwrite: true });
+        /* back from the mark: the flying copy just touched down on this exact
+           spot, so this one picks the landing up with the same squash */
+        const img = root.querySelector("img");
+        if (!shouldHide && wasPerched && img) {
+          gsap.fromTo(
+            img,
+            { scaleX: 1.3, scaleY: 0.7, transformOrigin: "50% 76%" },
+            { scaleX: 1, scaleY: 1, duration: 0.8, ease: "elastic.out(1, 0.32)" },
+          );
+        }
+      } else {
         gsap.to(root, {
           autoAlpha: shouldHide ? 0 : 1,
           scale: 1,
@@ -186,9 +197,12 @@ export default function ClawdPet() {
           ease: "power2.out",
           overwrite: true,
         });
+      }
     };
     syncHero(true);
-    const onPerch = () => syncHero();
+    /* the hand-over to and from the perch is frame-exact (the other copy
+       appears or vanishes on the same spot), so it must not fade */
+    const onPerch = () => syncHero(true);
     window.addEventListener("clawd-perch", onPerch);
 
     /* fast scrolling → a random work clip per burst (IDLE stays the baseline) */

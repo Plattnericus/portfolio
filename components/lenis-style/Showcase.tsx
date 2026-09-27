@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef } from "react";
-import { ArrowUpRight } from "lucide-react";
 import {
   EASE,
   MM_DESKTOP,
@@ -13,6 +12,7 @@ import {
   useGSAP,
 } from "@/lib/animation";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
+import { createPerchJump } from "@/components/clawd/perchJump";
 import { CLAWD_SPRITES } from "@/lib/clawd";
 import { projects } from "@/lib/projects";
 import { siteConfig } from "@/lib/site";
@@ -72,32 +72,38 @@ export default function Showcase() {
            rest upright on the very frame the row stops — then Clawd hops off
            the corner and lands on top of it. */
         const setRoll = disc ? gsap.quickSetter(disc, "rotation", "deg") : null;
+        const jump = perch ? createPerchJump(perch, disc) : null;
+        /* ClawdPet reads this attribute to step out of (and back into) his
+           corner, so there is only ever one of him on screen */
+        const announce = (onMark: boolean) => {
+          document.documentElement.toggleAttribute("data-clawd-perched", onMark);
+          window.dispatchEvent(new Event("clawd-perch"));
+        };
         let perched: boolean | null = null;
         const setPerched = (next: boolean, instant: boolean) => {
           if (next === perched) return;
           perched = next;
-          /* ClawdPet reads this to step out of his corner while he is up here */
-          document.documentElement.toggleAttribute("data-clawd-perched", next);
-          window.dispatchEvent(new Event("clawd-perch"));
-          if (!perch) return;
-          gsap.killTweensOf(perch);
-          if (instant) {
-            gsap.set(perch, next ? { y: 0, autoAlpha: 1 } : { y: -60, autoAlpha: 0 });
+          if (instant || !jump) {
+            announce(next);
+            jump?.settle(next);
           } else if (next) {
-            gsap
-              .timeline()
-              .fromTo(perch, { y: -120, autoAlpha: 0 }, { autoAlpha: 1, duration: 0.12, ease: "none" })
-              .to(perch, { y: 0, duration: 0.75, ease: "bounce.out" }, 0);
+            announce(true);
+            jump.land();
           } else {
-            gsap.to(perch, { y: -60, autoAlpha: 0, duration: 0.28, ease: "power2.in" });
+            /* the corner copy only comes back once he has actually got there */
+            jump.leave(() => announce(false));
           }
         };
-        if (perch) gsap.set(perch, { y: -60, autoAlpha: 0 });
+        jump?.settle(false);
 
         const syncMark = (instant = false) => {
           const remaining = Math.max(0, Number(gsap.getProperty(track, "x")) + travel);
           setRoll?.((remaining / radius) * (180 / Math.PI));
-          setPerched(remaining <= PERCH_SLACK, instant);
+          /* on at the resting spot, off only once the mark is clearly rolling
+             away again — scrub smoothing creeps, and he must not hop on and
+             off over a few pixels */
+          if (remaining <= PERCH_SLACK) setPerched(true, instant);
+          else if (remaining > PERCH_SLACK * 6 || perched === null) setPerched(false, instant);
         };
 
         const tween = gsap
@@ -147,8 +153,8 @@ export default function Showcase() {
           ScrollTrigger.removeEventListener("refreshInit", sizeSection);
           section.removeEventListener("focusin", onFocusIn);
           section.style.removeProperty("height");
-          document.documentElement.removeAttribute("data-clawd-perched");
-          window.dispatchEvent(new Event("clawd-perch"));
+          jump?.kill();
+          announce(false);
         };
       });
 
@@ -242,57 +248,73 @@ export default function Showcase() {
           })}
 
           <div className="showcase-endcap">
-            <div className="endcap-copy">
-              <p className="endcap-title">
-                Want to <br />
-                <span>see more?</span>
-              </p>
+            <p className="endcap-title">
+              Want to <br />
+              <span>see more?</span>
+            </p>
+
+            <div className="endcap-row">
+              {/* The big mark is a second, mouse-only way to the same profile —
+                  the text link next to it is the one keyboards and screen
+                  readers get, so this one stays out of the tab order. */}
+              <a
+                className="endcap-mark"
+                href={siteConfig.github}
+                target="_blank"
+                rel="noreferrer"
+                tabIndex={-1}
+                aria-hidden="true"
+                data-clawd-perch
+              >
+                {/* three layers, one job each: the flight path (x/y), the flip
+                    (turns about his middle) and the squash & stretch (pivots on
+                    his feet) — one element can't have both pivots at once */}
+                <span className="endcap-clawd">
+                  <span className="endcap-clawd-spin">
+                    <span className="endcap-clawd-squash">
+                      {/* plain <img>: animated sprites must not go through
+                          next/image. He flies in idle and types once seated. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className="endcap-clawd-fly"
+                        src={CLAWD_SPRITES.IDLE}
+                        alt=""
+                        width={192}
+                        height={192}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className="endcap-clawd-sit"
+                        src={CLAWD_SPRITES.TYPING}
+                        alt=""
+                        width={192}
+                        height={192}
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                      />
+                    </span>
+                  </span>
+                </span>
+                <span className="endcap-disc">
+                  <svg viewBox="0 0 98 96" aria-hidden="true" focusable="false">
+                    <path fillRule="evenodd" clipRule="evenodd" d={GITHUB_MARK} />
+                  </svg>
+                </span>
+              </a>
+
               <a
                 className="endcap-link"
                 href={siteConfig.github}
                 target="_blank"
                 rel="noreferrer"
               >
-                <span className="endcap-link-text">github.com/Plattnericus</span>
-                <ArrowUpRight aria-hidden="true" />
+                github.com/Plattnericus
               </a>
-              <p className="endcap-small">
-                Need something built?{" "}
-                <a href={`mailto:${siteConfig.email}`}>Get in touch</a>.
-              </p>
             </div>
-
-            {/* The big mark is a second, mouse-only way to the same profile —
-                the text link above is the one keyboards and screen readers
-                get, so this one stays out of the tab order. */}
-            <a
-              className="endcap-mark"
-              href={siteConfig.github}
-              target="_blank"
-              rel="noreferrer"
-              tabIndex={-1}
-              aria-hidden="true"
-              data-clawd-perch
-            >
-              <span className="endcap-clawd">
-                {/* plain <img>: animated sprites must not go through next/image */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={CLAWD_SPRITES.TYPING}
-                  alt=""
-                  width={192}
-                  height={192}
-                  loading="lazy"
-                  decoding="async"
-                  draggable={false}
-                />
-              </span>
-              <span className="endcap-disc">
-                <svg viewBox="0 0 98 96" aria-hidden="true" focusable="false">
-                  <path fillRule="evenodd" clipRule="evenodd" d={GITHUB_MARK} />
-                </svg>
-              </span>
-            </a>
           </div>
         </div>
       </div>
