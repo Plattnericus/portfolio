@@ -65,6 +65,7 @@ export default function Showcase() {
            here before every refresh measures it. */
         const disc = section.querySelector<HTMLElement>(".endcap-disc");
         const perch = section.querySelector<HTMLElement>(".endcap-clawd");
+        const jump = perch ? createPerchJump(perch, disc) : null;
         /* travel and the mark's radius, cached per refresh — the roll below
            runs every scroll frame and must not read layout */
         const cards = gsap.utils.toArray<HTMLElement>(".showcase-card", section);
@@ -85,6 +86,7 @@ export default function Showcase() {
             half: card.offsetWidth / 2,
           }));
           section.style.height = `${window.innerHeight + PIN.showcase + travel * 0.4}px`;
+          jump?.resize();
         };
         sizeSection();
         ScrollTrigger.addEventListener("refreshInit", sizeSection);
@@ -94,7 +96,6 @@ export default function Showcase() {
            rest upright on the very frame the row stops — then Clawd hops off
            the corner and lands on top of it. */
         const setRoll = disc ? gsap.quickSetter(disc, "rotation", "deg") : null;
-        const jump = perch ? createPerchJump(perch, disc) : null;
         /* ClawdPet reads this attribute to step out of (and back into) his
            corner, so there is only ever one of him on screen */
         const announce = (onMark: boolean) => {
@@ -199,7 +200,7 @@ export default function Showcase() {
           ScrollTrigger.removeEventListener("refreshInit", sizeSection);
           section.removeEventListener("focusin", onFocusIn);
           section.style.removeProperty("height");
-          jump?.kill();
+          jump?.destroy();
           announce(false);
           /* quickSetter writes aren't part of the context, so clear them by
              hand before the mobile layout takes over these elements */

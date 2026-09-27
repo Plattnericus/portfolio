@@ -186,10 +186,15 @@ export default function ClawdPet() {
            spot, so this one picks the landing up with the same squash */
         const img = root.querySelector("img");
         if (!shouldHide && wasPerched && img) {
-          gsap.fromTo(
-            img,
-            { scaleX: 1.3, scaleY: 0.7, transformOrigin: "50% 76%" },
-            { scaleX: 1, scaleY: 1, duration: 0.8, ease: "elastic.out(1, 0.32)" },
+          /* baked into keyframes so it runs on the compositor, like the
+             flight that just ended here (perchJump.ts) */
+          const wobble = gsap.parseEase("elastic.out(1, 0.32)");
+          img.animate(
+            Array.from({ length: 41 }, (_, i) => {
+              const t = wobble(i / 40);
+              return { transform: `scale(${1.3 - 0.3 * t}, ${0.7 + 0.3 * t})` };
+            }),
+            { duration: 800, easing: "linear", fill: "none" },
           );
         }
       } else {

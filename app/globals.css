@@ -1080,6 +1080,41 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   filter: drop-shadow(0 8px 18px rgba(11, 9, 8, 0.45));
 }
 
+/* the copy of him that does the flying, between his corner and the mark
+   (perchJump.ts): fixed, so the pin never clips it, and animated on the
+   compositor. It pivots on his feet like the perched copy. */
+.clawd-flyer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 199;
+  visibility: hidden;
+  pointer-events: none;
+  line-height: 0;
+  transform-origin: 50% 76%;
+  will-change: transform;
+}
+
+.clawd-flyer-spin,
+.clawd-flyer-squash {
+  display: block;
+}
+
+.clawd-flyer-spin {
+  transform-origin: 50% 51%;
+}
+
+.clawd-flyer-squash {
+  transform-origin: 50% 76%;
+}
+
+.clawd-flyer img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 8px 18px rgba(11, 9, 8, 0.45));
+}
+
 /* he flies in idle and types once seated; without JS he is simply seated */
 .endcap-clawd-fly {
   visibility: hidden;
@@ -1677,6 +1712,7 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 .clawd-sprite img {
   width: 96px;
   height: 96px;
+  transform-origin: 50% 76%;
   object-fit: contain;
   filter: drop-shadow(0 6px 18px rgba(11, 9, 8, 0.25));
 }
