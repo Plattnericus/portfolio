@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { ArrowUpRight } from "lucide-react";
 import {
   EASE,
   MM_DESKTOP,
@@ -12,6 +13,7 @@ import {
   useGSAP,
 } from "@/lib/animation";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
+import RollText from "@/components/ui/RollText";
 import { createPerchJump } from "@/components/clawd/perchJump";
 import { CLAWD_SPRITES } from "@/lib/clawd";
 import { projects } from "@/lib/projects";
@@ -311,8 +313,17 @@ export default function Showcase() {
                 href={siteConfig.github}
                 target="_blank"
                 rel="noreferrer"
+                aria-label="github.com/Plattnericus"
               >
-                github.com/Plattnericus
+                <span className="endcap-link-text">
+                  <span className="endcap-link-host">
+                    <RollText text="github.com/" />
+                  </span>
+                  <span className="endcap-link-user">
+                    <RollText text="Plattnericus" offset={11} />
+                  </span>
+                </span>
+                <ArrowUpRight className="endcap-link-arrow" aria-hidden="true" />
               </a>
             </div>
           </div>
