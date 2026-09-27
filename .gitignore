@@ -36,6 +36,7 @@ pnpm-debug.log*
 .claude/
 .claude.json
 CLAUDE.md
+AGENTS.md
 .chatgpt/
 .chatgpt*
 CHATGPT.md
