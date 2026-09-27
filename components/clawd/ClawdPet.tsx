@@ -256,15 +256,6 @@ export default function ClawdPet() {
       ];
     });
 
-    /* other parts of the page can make him say something (the footer's
-       copy-email button does) */
-    const onSay = (event: Event) => {
-      const detail = (event as CustomEvent<{ clip: ClawdClip; line: string }>).detail;
-      if (!detail) return;
-      propose({ clip: detail.clip, kind: "click", until: performance.now() + 2800, bubble: detail.line });
-    };
-    window.addEventListener("clawd-say", onSay);
-
     /* fall back to IDLE whenever the active state expires */
     const expiry = window.setInterval(() => {
       const current = stateRef.current;
@@ -274,7 +265,6 @@ export default function ClawdPet() {
     }, 500);
 
     return () => {
-      window.removeEventListener("clawd-say", onSay);
       window.removeEventListener("clawd-perch", onPerch);
       window.clearTimeout(flavorTimer);
       window.clearInterval(scrollInterval);

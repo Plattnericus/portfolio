@@ -37,9 +37,7 @@ const TRAVEL_SHARE = 0.9;
     jumps on — with scrub smoothing it creeps the last few px. */
 const PERCH_SLACK = 4;
 /** How far (% of its own width) a clip drifts inside its frame. */
-const PARALLAX = 5;
-/** Most the cards lean (deg) into a fast scroll. */
-const MAX_LEAN = 3.5;
+const PARALLAX = 4;
 
 export default function Showcase() {
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -72,12 +70,11 @@ export default function Showcase() {
         const cards = gsap.utils.toArray<HTMLElement>(".showcase-card", section);
         const media = cards.map((card) => card.querySelector<HTMLElement>(".sc-media"));
         const setMedia = media.map((el) => (el ? gsap.quickSetter(el, "xPercent") : null));
-        const current = section.querySelector<HTMLElement>(".sp-current");
         let travel = distance();
         let radius = 1;
         let half = window.innerWidth / 2;
         /* each card's centre and half-width with the row at rest (offsetLeft
-           ignores the transform), for the counter and the parallax */
+           ignores the transform), for the parallax */
         let geometry: Array<{ center: number; half: number }> = [];
         const sizeSection = () => {
           travel = distance();
@@ -124,37 +121,16 @@ export default function Showcase() {
         };
         jump?.settle(false);
 
-        /* the counter rolls to the card nearest the middle of the screen */
-        let shown = 0;
-        const showCard = (index: number) => {
-          if (index === shown || !current) return;
-          const direction = index > shown ? 1 : -1;
-          shown = index;
-          current.textContent = String(index + 1).padStart(2, "0");
-          gsap.fromTo(
-            current,
-            { yPercent: direction * 100 },
-            { yPercent: 0, duration: 0.55, ease: "power3.out", overwrite: true },
-          );
-        };
-
         const syncMark = (instant = false) => {
           const x = Number(gsap.getProperty(track, "x"));
           const remaining = Math.max(0, x + travel);
 
           /* each clip drifts against its card's travel, a few percent of its
              own width, so the footage sits a little deeper than its frame */
-          let nearest = 0;
-          let best = Infinity;
           geometry.forEach((card, index) => {
             const offset = card.center + x - half;
-            if (Math.abs(offset) < best) {
-              best = Math.abs(offset);
-              nearest = index;
-            }
             setMedia[index]?.(-gsap.utils.clamp(-1, 1, offset / (half + card.half)) * PARALLAX);
           });
-          showCard(nearest);
 
           setRoll?.((remaining / radius) * (180 / Math.PI));
           /* on at the resting spot, off only once the mark is clearly rolling
@@ -164,10 +140,6 @@ export default function Showcase() {
           else if (remaining <= PERCH_SLACK) setPerched(true, instant);
           else if (remaining > PERCH_SLACK * 6 || perched === null) setPerched(false, instant);
         };
-
-        const setSkew = gsap.quickSetter(cards, "skewX", "deg");
-        const clampSkew = gsap.utils.clamp(-MAX_LEAN, MAX_LEAN);
-        const lean = { skew: 0 };
 
         const tween = gsap
           .timeline({
@@ -189,20 +161,6 @@ export default function Showcase() {
               onEnterBack: () => {
                 pastEnd = false;
                 syncMark();
-              },
-              /* the cards lean into a fast scroll and straighten up again */
-              onUpdate: (self) => {
-                const moving = self.progress < TRAVEL_SHARE;
-                const skew = moving ? clampSkew(self.getVelocity() / 420) : 0;
-                if (Math.abs(skew) <= Math.abs(lean.skew)) return;
-                lean.skew = skew;
-                gsap.to(lean, {
-                  skew: 0,
-                  duration: 0.9,
-                  ease: "power3.out",
-                  overwrite: true,
-                  onUpdate: () => setSkew(lean.skew),
-                });
               },
             },
             onUpdate: () => syncMark(),
@@ -243,11 +201,9 @@ export default function Showcase() {
           section.style.removeProperty("height");
           jump?.kill();
           announce(false);
-          gsap.killTweensOf(lean);
           /* quickSetter writes aren't part of the context, so clear them by
              hand before the mobile layout takes over these elements */
-          [...cards, ...media, disc].forEach((el) => el?.style.removeProperty("transform"));
-          if (current) current.textContent = "01";
+          [...media, disc].forEach((el) => el?.style.removeProperty("transform"));
         };
       });
 
@@ -306,23 +262,12 @@ export default function Showcase() {
             <br />
             runs live
           </h2>
-          <div className="showcase-side">
-            <p className="showcase-copy">
-              Not mockups — deployments. A school platform students open every morning, a
-              real fruit-fly brain that gambles, a 3D portfolio, a browser desktop, a
-              Minecraft mod on Modrinth. Everything here is real, and most of it is one click
-              away.
-            </p>
-            {/* which card you are on — desktop only, driven from the pin */}
-            <div className="showcase-progress" aria-hidden="true">
-              <span className="sp-count">
-                <span className="sp-mask">
-                  <span className="sp-current">01</span>
-                </span>
-                <span className="sp-total">/ {String(projects.length).padStart(2, "0")}</span>
-              </span>
-            </div>
-          </div>
+          <p className="showcase-copy">
+            Not mockups — deployments. A school platform students open every morning, a
+            real fruit-fly brain that gambles, a 3D portfolio, a browser desktop, a
+            Minecraft mod on Modrinth. Everything here is real, and most of it is one click
+            away.
+          </p>
         </div>
 
         <div className="showcase-track">

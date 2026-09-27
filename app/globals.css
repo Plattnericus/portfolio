@@ -294,15 +294,6 @@ main {
   }
 }
 
-/* the copy-email button rolls on its own state instead of on hover */
-.is-swapped .roll-row:not(.roll-row--next) .roll-char {
-  transform: translateY(-130%) !important;
-}
-
-.is-swapped .roll-row--next .roll-char {
-  transform: none !important;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .roll-char,
   .pill-icon svg {
@@ -469,55 +460,6 @@ main {
 .hero-by a {
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-/* "open to projects", with the time where he actually is */
-.hero-status {
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
-  margin-top: 0.55em;
-  color: rgba(242, 237, 230, 0.62);
-}
-
-.status-dot {
-  position: relative;
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.status-dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: live-pulse 2.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
-}
-
-.local-time {
-  color: var(--light);
-  font-variant-numeric: tabular-nums;
-}
-
-.local-time-colon {
-  animation: colon-blink 1s steps(1, end) infinite;
-}
-
-@keyframes colon-blink {
-  50% {
-    opacity: 0.2;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .status-dot::after,
-  .local-time-colon {
-    animation: none;
-  }
 }
 
 .hero-actions {
@@ -754,54 +696,6 @@ main {
   color: var(--accent);
 }
 
-.showcase-side {
-  display: grid;
-  gap: clamp(1.2rem, 3vh, 2rem);
-  max-width: 32rem;
-}
-
-/* "03 / 07", rolling to the card you are on — desktop pin only */
-.showcase-progress {
-  display: none;
-  align-items: center;
-  gap: 1.1rem;
-}
-
-@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
-  .showcase-progress {
-    display: flex;
-  }
-}
-
-.sp-count {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35em;
-  font-family: var(--font-head);
-  font-size: clamp(1.2rem, 1.5vw, 1.6rem);
-  line-height: 1;
-  color: var(--light);
-  font-variant-numeric: tabular-nums;
-}
-
-.sp-mask {
-  display: inline-block;
-  overflow: hidden;
-  padding-block: 0.08em;
-  margin-block: -0.08em;
-}
-
-.sp-current {
-  display: inline-block;
-  color: var(--accent);
-}
-
-.sp-total {
-  font-size: 0.72em;
-  color: rgba(242, 237, 230, 0.45);
-}
-
-
 .showcase-track {
   display: flex;
   align-items: flex-start;
@@ -828,22 +722,6 @@ main {
   background: #16110e;
 }
 
-.sc-frame::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: var(--accent);
-  opacity: 0;
-  transition: opacity 0.6s var(--ease-out-expo);
-}
-
-.showcase-card:hover .sc-frame::after,
-.showcase-card:focus-within .sc-frame::after {
-  opacity: 0.33;
-}
-
 .sc-media {
   position: absolute;
   inset: 0;
@@ -858,15 +736,16 @@ main {
 }
 
 /* desktop pin: each clip sits a little larger than its frame so it has room
-   to drift (the parallax in Showcase.tsx), and leans in further on hover */
+   to drift (the parallax in Showcase.tsx). Hover is kept quiet on purpose —
+   no tint over the footage, just a slow lean in; the cursor says the rest */
 @media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
   .sc-media {
-    scale: 1.12;
-    transition: scale 0.9s var(--ease-out-expo);
+    scale: 1.1;
+    transition: scale 1.4s var(--ease-out-expo);
   }
 
   .showcase-card:hover .sc-media {
-    scale: 1.2;
+    scale: 1.15;
   }
 }
 
@@ -958,12 +837,14 @@ main {
   transition: transform 0.6s var(--ease-out-expo);
 }
 
-.showcase-card:hover .sc-arrow,
+/* the corner arrow is for keyboards and for pointers without the custom
+   cursor — where the cursor shows its "Open" label, it would say it twice */
+html:not(.has-cursor) .showcase-card:hover .sc-arrow,
 .showcase-card:focus-within .sc-arrow {
   opacity: 1;
 }
 
-.showcase-card:hover .sc-arrow svg,
+html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 .showcase-card:focus-within .sc-arrow svg {
   transform: scale(1);
 }
@@ -1641,132 +1522,6 @@ main {
   margin-top: 6vh;
 }
 
-.fx-cta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* copy the address instead of opening a mail app: the label rolls over to
-   "Copied" and the icon swaps to a tick, then both roll back */
-.fx-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 45px;
-  padding: 0 1.1rem 0 0.4rem;
-  border: 1.5px solid rgba(11, 9, 8, 0.16);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--dark);
-  font-family: var(--font-ui);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 0.3s ease,
-    background-color 0.3s ease,
-    scale 0.2s ease;
-}
-
-.fx-copy:hover {
-  border-color: var(--accent-strong);
-  background: rgba(166, 61, 34, 0.06);
-}
-
-.fx-copy:active {
-  scale: 0.97;
-}
-
-.fx-copy-icon {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  overflow: hidden;
-  border-radius: 9px;
-  background: rgba(11, 9, 8, 0.07);
-  color: var(--accent-strong);
-}
-
-.fx-copy-icon svg {
-  grid-area: 1 / 1;
-  width: 17px;
-  height: 17px;
-  transition:
-    transform 0.55s var(--ease-out-expo),
-    opacity 0.3s ease;
-}
-
-.fx-copy-icon svg:last-child,
-.fx-copy.is-copied .fx-copy-icon svg:first-child {
-  transform: translateY(140%);
-  opacity: 0;
-}
-
-.fx-copy.is-copied .fx-copy-icon svg:first-child {
-  transform: translateY(-140%);
-}
-
-.fx-copy.is-copied .fx-copy-icon svg:last-child {
-  transform: none;
-  opacity: 1;
-}
-
-.fx-copy-label {
-  display: grid;
-  overflow: hidden;
-  padding-block: 0.15em;
-  margin-block: -0.15em;
-}
-
-.fx-copy-email,
-.fx-copy-done {
-  grid-area: 1 / 1;
-  transition:
-    transform 0.6s var(--ease-out-expo),
-    opacity 0.35s ease;
-}
-
-.fx-copy-done {
-  color: var(--accent-strong);
-  transform: translateY(110%);
-  opacity: 0;
-}
-
-.fx-copy.is-copied .fx-copy-email {
-  transform: translateY(-110%);
-  opacity: 0;
-}
-
-.fx-copy.is-copied .fx-copy-done {
-  transform: none;
-  opacity: 1;
-}
-
-.fx-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem clamp(1.4rem, 3vw, 2.6rem);
-}
-
-.fx-time {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6em;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: rgba(11, 9, 8, 0.5);
-}
-
-.fx-time .local-time {
-  color: var(--dark);
-}
-
 .fx-links {
   display: flex;
   gap: clamp(1.4rem, 3vw, 2.6rem);
@@ -2363,26 +2118,30 @@ html[data-light] .cursor-ring.is-link {
   border-color: rgba(166, 61, 34, 0.8);
 }
 
+/* a small label that floats just below-right of the dot — the same dark
+   chip as the "Live" tags on the clips, not a big disc over the footage */
 .cursor-badge {
-  width: 92px;
-  height: 92px;
-  margin: -46px 0 0 -46px;
+  margin: 14px 0 0 14px;
+  height: 28px;
+  padding: 0 0.7rem 0 0.8rem;
   align-items: center;
-  justify-content: center;
-  gap: 0.2rem;
-  background: var(--accent);
-  color: var(--dark);
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: rgba(11, 9, 8, 0.82);
+  color: var(--light);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  box-shadow: 0 10px 30px rgba(11, 9, 8, 0.35);
+  white-space: nowrap;
+  transform-origin: 0 0;
 }
 
 .cursor-badge svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  color: var(--accent);
 }
 
 @media (min-width: 900px) and (prefers-reduced-motion: no-preference) {

@@ -11,9 +11,9 @@ const MAGNET_MAX = 12;
 
 /**
  * Custom cursor accent: a dot plus a lagging ring that grows over links. Over
- * anything with a data-cursor attribute (the project cards) both give way to
- * a terracotta badge carrying that label, and the native pointer is hidden
- * there. Colours follow the page's dark/cream halves (html[data-light], set
+ * anything with a data-cursor attribute (the project cards) the ring gives way
+ * to a small dark label floating beside the dot, and the native pointer is
+ * hidden there. Colours follow the page's dark/cream halves (html[data-light], set
  * by Rethink), and pills are pulled a little toward the pointer.
  */
 export default function CursorGlow() {
@@ -34,7 +34,7 @@ export default function CursorGlow() {
         const html = document.documentElement;
         html.classList.add("has-cursor");
         gsap.set([dot, ring, badge], { x: -200, y: -200 });
-        gsap.set(badge, { scale: 0, autoAlpha: 0 });
+        gsap.set(badge, { scale: 0.6, autoAlpha: 0 });
         gsap.set(root, { autoAlpha: 0 });
         const dotX = gsap.quickTo(dot, "x", { duration: 0.1, ease: "power2.out" });
         const dotY = gsap.quickTo(dot, "y", { duration: 0.1, ease: "power2.out" });
@@ -117,12 +117,11 @@ export default function CursorGlow() {
             badgeLabel.textContent = labelled.dataset.cursor ?? "";
             /* "auto", not true: true would also kill the quickTo tweens
                that make these follow the pointer */
-            gsap.to(badge, { scale: 1, autoAlpha: 1, duration: 0.45, ease: "back.out(1.8)", overwrite: "auto" });
-            gsap.to([ring, dot], { scale: 0, duration: 0.3, ease: "power3.out", overwrite: "auto" });
+            gsap.to(badge, { scale: 1, autoAlpha: 1, duration: 0.4, ease: "power3.out", overwrite: "auto" });
+            gsap.to(ring, { scale: 0, duration: 0.3, ease: "power3.out", overwrite: "auto" });
           } else if (!labelled && badgeOn) {
             badgeOn = false;
-            gsap.to(badge, { scale: 0, autoAlpha: 0, duration: 0.3, ease: "power3.in", overwrite: "auto" });
-            gsap.to(dot, { scale: 1, duration: 0.3, ease: "power3.out", overwrite: "auto" });
+            gsap.to(badge, { scale: 0.6, autoAlpha: 0, duration: 0.25, ease: "power3.in", overwrite: "auto" });
           }
           if (!labelled) {
             ring.classList.toggle("is-link", !!interactive);
@@ -148,7 +147,7 @@ export default function CursorGlow() {
           releaseMagnet();
         };
         const onDown = () =>
-          gsap.to(badgeOn ? badge : ring, { scale: badgeOn ? 0.86 : 0.75, duration: 0.15, ease: "power2.out" });
+          gsap.to(badgeOn ? badge : ring, { scale: badgeOn ? 0.92 : 0.75, duration: 0.15, ease: "power2.out" });
         const onUp = () =>
           gsap.to(badgeOn ? badge : ring, { scale: 1, duration: 0.5, ease: "elastic.out(1, 0.5)" });
 
