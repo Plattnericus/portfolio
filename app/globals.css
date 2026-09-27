@@ -506,14 +506,71 @@ main {
   padding-left: clamp(1rem, 2vw, 2rem);
 }
 
-.why-title::before {
-  content: "";
+/* the title's rule: a quiet track that the terracotta fills as you read
+   through the beats (Why.tsx) — full from the start without JS */
+.why-rail {
   position: absolute;
   left: 0;
   top: -0.3em;
   bottom: -0.6em;
   width: 4px;
+  background: rgba(217, 119, 87, 0.22);
+}
+
+.why-rail-fill {
+  position: absolute;
+  inset: 0;
   background: var(--accent);
+  transform-origin: center top;
+}
+
+/* one line of a heading that slides up out of its own mask */
+.line-mask {
+  display: block;
+  overflow: hidden;
+  /* room for the glyphs below the line box inside the clip */
+  padding-bottom: 0.06em;
+  margin-bottom: -0.06em;
+}
+
+.line-in {
+  display: block;
+}
+
+.why-count {
+  display: none;
+  align-items: baseline;
+  gap: 0.35em;
+  margin-top: 2.4rem;
+  padding-left: clamp(1rem, 2vw, 2rem);
+  font-family: var(--font-head);
+  font-size: clamp(1.5rem, 2vw, 2.1rem);
+  line-height: 1;
+  color: var(--light);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .why-count {
+    display: flex;
+  }
+}
+
+.why-count-mask {
+  display: inline-block;
+  overflow: hidden;
+  padding-block: 0.08em;
+  margin-block: -0.08em;
+}
+
+.why-current {
+  display: inline-block;
+  color: var(--accent);
+}
+
+.why-count-total {
+  font-size: 0.62em;
+  color: rgba(242, 237, 230, 0.4);
 }
 
 .why-intro {
@@ -529,6 +586,35 @@ main {
   display: grid;
   gap: 44vh;
   padding: 16vh clamp(1.4rem, 7vw, 8rem) 28vh clamp(1rem, 3vw, 3rem);
+}
+
+.why-num {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  margin-bottom: 1.1rem;
+  color: rgba(242, 237, 230, 0.42);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.why-num::after {
+  content: "";
+  width: 2.4rem;
+  height: 1px;
+  background: currentColor;
+}
+
+/* desktop: the beat being read has the floor, the others step back */
+.why.has-active .why-item > * {
+  opacity: 0.26;
+  transition: opacity 0.8s var(--ease-out-expo);
+}
+
+.why.has-active .why-item.is-active > * {
+  opacity: 1;
 }
 
 .why-item h3 {
