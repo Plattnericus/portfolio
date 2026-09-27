@@ -176,6 +176,10 @@ export default function Rethink() {
           else if (progress < RETHINK_COVER_AT - FLIP_HYSTERESIS) bgCream = false;
           write(document.body, "--page-bg", bgCream ? "#f2ede6" : "#0b0908");
           write(enterEl, "visibility", bgCream ? "hidden" : "visible");
+          /* lets fixed chrome (the cursor) follow the page into its cream half */
+          if (document.documentElement.hasAttribute("data-light") !== bgCream) {
+            document.documentElement.toggleAttribute("data-light", bgCream);
+          }
         };
 
         const trigger = ScrollTrigger.create({
@@ -205,6 +209,7 @@ export default function Rethink() {
           firstEl?.style.removeProperty("opacity");
           secondEl?.style.removeProperty("opacity");
           document.body.style.removeProperty("--page-bg");
+          document.documentElement.removeAttribute("data-light");
           enterEl?.style.removeProperty("transform");
           enterEl?.style.removeProperty("opacity");
           enterEl?.style.removeProperty("visibility");

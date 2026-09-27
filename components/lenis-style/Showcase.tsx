@@ -24,12 +24,22 @@ import ProjectPreview from "./ProjectPreview";
 const GITHUB_MARK =
   "M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z";
 
+/** The chip on a card's clip: where the project is running. */
+function liveLabel(url: string | null) {
+  if (!url) return null;
+  return url.includes("modrinth.com") ? "On Modrinth" : "Live";
+}
+
 /** Share of the pinned scroll the horizontal travel uses; the rest is a
     dwell on the finished row, where Clawd lands on the GitHub mark. */
 const TRAVEL_SHARE = 0.9;
 /** How close (px) to its resting spot the mark has to roll before Clawd
     jumps on — with scrub smoothing it creeps the last few px. */
 const PERCH_SLACK = 4;
+/** How far (% of its own width) a clip drifts inside its frame. */
+const PARALLAX = 5;
+/** Most the cards lean (deg) into a fast scroll. */
+const MAX_LEAN = 3.5;
 
 export default function Showcase() {
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -59,11 +69,26 @@ export default function Showcase() {
         const perch = section.querySelector<HTMLElement>(".endcap-clawd");
         /* travel and the mark's radius, cached per refresh — the roll below
            runs every scroll frame and must not read layout */
+        const cards = gsap.utils.toArray<HTMLElement>(".showcase-card", section);
+        const media = cards.map((card) => card.querySelector<HTMLElement>(".sc-media"));
+        const setMedia = media.map((el) => (el ? gsap.quickSetter(el, "xPercent") : null));
+        const fill = section.querySelector<HTMLElement>(".sp-fill");
+        const setFill = fill ? gsap.quickSetter(fill, "scaleX") : null;
+        const current = section.querySelector<HTMLElement>(".sp-current");
         let travel = distance();
         let radius = 1;
+        let half = window.innerWidth / 2;
+        /* each card's centre and half-width with the row at rest (offsetLeft
+           ignores the transform), for the counter and the parallax */
+        let geometry: Array<{ center: number; half: number }> = [];
         const sizeSection = () => {
           travel = distance();
           radius = Math.max(1, (disc?.offsetWidth ?? 2) / 2);
+          half = window.innerWidth / 2;
+          geometry = cards.map((card) => ({
+            center: card.offsetLeft + card.offsetWidth / 2,
+            half: card.offsetWidth / 2,
+          }));
           section.style.height = `${window.innerHeight + PIN.showcase + travel * 0.4}px`;
         };
         sizeSection();
@@ -98,8 +123,39 @@ export default function Showcase() {
         };
         jump?.settle(false);
 
+        /* the counter rolls to the card nearest the middle of the screen */
+        let shown = 0;
+        const showCard = (index: number) => {
+          if (index === shown || !current) return;
+          const direction = index > shown ? 1 : -1;
+          shown = index;
+          current.textContent = String(index + 1).padStart(2, "0");
+          gsap.fromTo(
+            current,
+            { yPercent: direction * 100 },
+            { yPercent: 0, duration: 0.55, ease: "power3.out", overwrite: true },
+          );
+        };
+
         const syncMark = (instant = false) => {
-          const remaining = Math.max(0, Number(gsap.getProperty(track, "x")) + travel);
+          const x = Number(gsap.getProperty(track, "x"));
+          const remaining = Math.max(0, x + travel);
+          setFill?.(travel > 0 ? 1 - remaining / travel : 1);
+
+          /* each clip drifts against its card's travel, a few percent of its
+             own width, so the footage sits a little deeper than its frame */
+          let nearest = 0;
+          let best = Infinity;
+          geometry.forEach((card, index) => {
+            const offset = card.center + x - half;
+            if (Math.abs(offset) < best) {
+              best = Math.abs(offset);
+              nearest = index;
+            }
+            setMedia[index]?.(-gsap.utils.clamp(-1, 1, offset / (half + card.half)) * PARALLAX);
+          });
+          showCard(nearest);
+
           setRoll?.((remaining / radius) * (180 / Math.PI));
           /* on at the resting spot, off only once the mark is clearly rolling
              away again — scrub smoothing creeps, and he must not hop on and
@@ -107,6 +163,10 @@ export default function Showcase() {
           if (remaining <= PERCH_SLACK) setPerched(true, instant);
           else if (remaining > PERCH_SLACK * 6 || perched === null) setPerched(false, instant);
         };
+
+        const setSkew = gsap.quickSetter(cards, "skewX", "deg");
+        const clampSkew = gsap.utils.clamp(-MAX_LEAN, MAX_LEAN);
+        const lean = { skew: 0 };
 
         const tween = gsap
           .timeline({
@@ -118,6 +178,20 @@ export default function Showcase() {
               scrub: 1,
               invalidateOnRefresh: true,
               onRefresh: () => syncMark(true),
+              /* the cards lean into a fast scroll and straighten up again */
+              onUpdate: (self) => {
+                const moving = self.progress < TRAVEL_SHARE;
+                const skew = moving ? clampSkew(self.getVelocity() / 420) : 0;
+                if (Math.abs(skew) <= Math.abs(lean.skew)) return;
+                lean.skew = skew;
+                gsap.to(lean, {
+                  skew: 0,
+                  duration: 0.9,
+                  ease: "power3.out",
+                  overwrite: true,
+                  onUpdate: () => setSkew(lean.skew),
+                });
+              },
             },
             onUpdate: () => syncMark(),
           })
@@ -157,6 +231,11 @@ export default function Showcase() {
           section.style.removeProperty("height");
           jump?.kill();
           announce(false);
+          gsap.killTweensOf(lean);
+          /* quickSetter writes aren't part of the context, so clear them by
+             hand before the mobile layout takes over these elements */
+          [...cards, ...media, disc, fill].forEach((el) => el?.style.removeProperty("transform"));
+          if (current) current.textContent = "01";
         };
       });
 
@@ -215,25 +294,45 @@ export default function Showcase() {
             <br />
             runs live
           </h2>
-          <p className="showcase-copy">
-            Not mockups — deployments. A school platform students open every morning, a 3D
-            portfolio, a browser desktop, a Minecraft mod on Modrinth. Everything here is
-            real, and most of it is one click away.
-          </p>
+          <div className="showcase-side">
+            <p className="showcase-copy">
+              Not mockups — deployments. A school platform students open every morning, a 3D
+              portfolio, a browser desktop, a Minecraft mod on Modrinth. Everything here is
+              real, and most of it is one click away.
+            </p>
+            {/* where you are in the row — desktop only, driven from the pin */}
+            <div className="showcase-progress" aria-hidden="true">
+              <span className="sp-count">
+                <span className="sp-mask">
+                  <span className="sp-current">01</span>
+                </span>
+                <span className="sp-total">/ {String(projects.length).padStart(2, "0")}</span>
+              </span>
+              <span className="sp-bar">
+                <span className="sp-fill" />
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="showcase-track">
-          {projects.map((project) => {
+          {projects.map((project, index) => {
             const href = project.liveUrl ?? project.githubUrl ?? siteConfig.github;
             return (
-              <div key={project.slug} className="showcase-card">
+              <div key={project.slug} className="showcase-card" data-cursor="Open">
                 <ProjectPreview
                   preview={project.preview}
                   name={project.name}
                   eyebrow={project.eyebrow}
+                  status={liveLabel(project.liveUrl)}
                 />
                 <span className="sc-meta">
-                  <span className="sc-name">{project.name}</span>
+                  <span className="sc-name">
+                    <span className="sc-index" aria-hidden="true">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {project.name}
+                  </span>
                   <span className="sc-kind">
                     {project.eyebrow} · {project.tech.slice(0, 3).join(" · ")}
                   </span>

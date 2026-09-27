@@ -28,9 +28,16 @@ type ProjectPreviewProps = {
   preview: ProjectPreviewData;
   name: string;
   eyebrow: string;
+  /** chip in the clip's corner ("Live", "On Modrinth"), if it runs anywhere */
+  status?: string | null;
 };
 
-export default function ProjectPreview({ preview, name, eyebrow }: ProjectPreviewProps) {
+export default function ProjectPreview({
+  preview,
+  name,
+  eyebrow,
+  status,
+}: ProjectPreviewProps) {
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { introDone } = useSmoothScroll();
@@ -128,6 +135,13 @@ export default function ProjectPreview({ preview, name, eyebrow }: ProjectPrevie
         style={{ objectPosition }}
         onError={handleVideoError}
       />
+
+      {status && (
+        <span className="sc-live" aria-hidden="true">
+          <span className="sc-live-dot" />
+          {status}
+        </span>
+      )}
 
       <span className="sc-arrow" aria-hidden="true">
         <ArrowUpRight />

@@ -619,6 +619,70 @@ main {
   color: var(--accent);
 }
 
+.showcase-side {
+  display: grid;
+  gap: clamp(1.2rem, 3vh, 2rem);
+  max-width: 32rem;
+}
+
+/* "03 / 06" and a bar that fills with the row — desktop pin only */
+.showcase-progress {
+  display: none;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .showcase-progress {
+    display: flex;
+  }
+}
+
+.sp-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-family: var(--font-head);
+  font-size: clamp(1.2rem, 1.5vw, 1.6rem);
+  line-height: 1;
+  color: var(--light);
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-mask {
+  display: inline-block;
+  overflow: hidden;
+  padding-block: 0.08em;
+  margin-block: -0.08em;
+}
+
+.sp-current {
+  display: inline-block;
+  color: var(--accent);
+}
+
+.sp-total {
+  font-size: 0.72em;
+  color: rgba(242, 237, 230, 0.45);
+}
+
+.sp-bar {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(242, 237, 230, 0.14);
+}
+
+.sp-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
 .showcase-track {
   display: flex;
   align-items: flex-start;
@@ -672,6 +736,84 @@ main {
 
 .sc-video {
   z-index: 0;
+}
+
+/* desktop pin: each clip sits a little larger than its frame so it has room
+   to drift (the parallax in Showcase.tsx), and leans in further on hover */
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .sc-media {
+    scale: 1.12;
+    transition: scale 0.9s var(--ease-out-expo);
+  }
+
+  .showcase-card:hover .sc-media {
+    scale: 1.2;
+  }
+}
+
+/* where the project runs, with a slow pulse on the dot — solid rather than
+   frosted: a backdrop blur over six playing clips re-blurs every frame */
+.sc-live {
+  position: absolute;
+  z-index: 3;
+  top: clamp(10px, 0.9vw, 16px);
+  left: clamp(10px, 0.9vw, 16px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.42em 0.8em 0.42em 0.7em;
+  border-radius: 999px;
+  background: rgba(11, 9, 8, 0.78);
+  color: var(--light);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sc-live-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sc-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: live-pulse 2.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+@keyframes live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-live-dot::after {
+    animation: none;
+  }
+}
+
+.sc-index {
+  margin-right: 0.75em;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
 }
 
 .sc-arrow {
@@ -1931,7 +2073,8 @@ main {
 }
 
 .cursor-dot,
-.cursor-ring {
+.cursor-ring,
+.cursor-badge {
   position: fixed;
   left: 0;
   top: 0;
@@ -1946,6 +2089,7 @@ main {
   height: 6px;
   margin: -3px 0 0 -3px;
   background: var(--sand);
+  transition: background-color 0.4s ease;
 }
 
 .cursor-ring {
@@ -1953,6 +2097,47 @@ main {
   height: 36px;
   margin: -18px 0 0 -18px;
   border: 1px solid rgba(221, 184, 146, 0.45);
+  transition: border-color 0.35s ease;
+}
+
+.cursor-ring.is-link {
+  border-color: rgba(230, 204, 178, 0.85);
+}
+
+/* the cream half of the page (html[data-light] is set by Rethink the moment
+   the T has flooded the frame): ink and rust instead of sand */
+html[data-light] .cursor-dot {
+  background: var(--accent-strong);
+}
+
+html[data-light] .cursor-ring {
+  border-color: rgba(11, 9, 8, 0.32);
+}
+
+html[data-light] .cursor-ring.is-link {
+  border-color: rgba(166, 61, 34, 0.8);
+}
+
+.cursor-badge {
+  width: 92px;
+  height: 92px;
+  margin: -46px 0 0 -46px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  background: var(--accent);
+  color: var(--dark);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 30px rgba(11, 9, 8, 0.35);
+}
+
+.cursor-badge svg {
+  width: 14px;
+  height: 14px;
 }
 
 @media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
@@ -1960,6 +2145,16 @@ main {
   .cursor-ring {
     display: block;
   }
+
+  .cursor-badge {
+    display: flex;
+  }
+}
+
+/* the badge stands in for the pointer wherever it shows */
+html.has-cursor [data-cursor],
+html.has-cursor [data-cursor] * {
+  cursor: none;
 }
 
 .ai-page {
