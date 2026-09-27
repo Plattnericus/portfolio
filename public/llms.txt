@@ -26,6 +26,7 @@ Nexor / Plattnericus builds real software projects across interfaces, APIs, back
 - Selfhosted systems
 - Cybersecurity learning path
 - POKYH (school platform: timetable, grades, absences, messages — live at https://pokyh.com)
+- Fly Lab (a real fruit-fly connectome simulated in the browser — live at https://fly.pokyh.com)
 - ThreeJS Portfolio (immersive 3D web experience — live at https://threejs.plattnericus.dev)
 - StreamDeck (browser desktop inspired by macOS)
 - Magic-Mirror (selfhosted smart display)

@@ -28,6 +28,8 @@ export const siteConfig = {
     "Three.js",
     "WebGL",
     "POKYH",
+    "Fly Lab",
+    "Fruit fly connectome",
     "ThreeJS Portfolio",
     "StreamDeck",
     "Magic-Mirror",

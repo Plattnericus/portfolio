@@ -39,6 +39,24 @@ export const projects: Project[] = [
     },
   },
   {
+    name: "Fly Lab",
+    slug: "fly-lab",
+    repoName: "fruit-fly-hub",
+    eyebrow: "Real fly brain",
+    description:
+      "A real fruit-fly connectome running in the browser: a CT-scanned Drosophila whose 60,001 measured neurons (MaleCNS v1.0) drive it to gamble, trade, game and code on its own — one hub of experiments on the same brain.",
+    tech: ["React Three Fiber", "Three.js", "Neural simulation", "Vite"],
+    liveUrl: "https://fly.pokyh.com",
+    githubUrl: "https://github.com/bedchem/fruit-fly-hub",
+    preview: {
+      /* the tail crossfades into the head, so the "so close" card at the end
+         fades out instead of popping off at the loop */
+      kind: "video",
+      src: "/projects/fly_lab.mp4",
+      poster: "/showcase/fly-lab.webp",
+    },
+  },
+  {
     name: "ThreeJS Portfolio",
     slug: "threejs-portfolio",
     repoName: "ThreeJS_Portfolio",

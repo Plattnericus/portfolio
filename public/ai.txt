@@ -33,6 +33,7 @@ Primary topics:
 
 Showcased projects:
 - POKYH: school platform around real student workflows (timetable, grades, absences, messages, mobile app, backend, APIs, deployment), live at https://pokyh.com
+- Fly Lab: a real fruit-fly connectome (60,001 neurons, MaleCNS v1.0) simulated in the browser, driving a CT-scanned fly through experiments like a slot machine, live at https://fly.pokyh.com, repo at https://github.com/bedchem/fruit-fly-hub
 - ThreeJS Portfolio: immersive 3D portfolio with WebGL scenes and camera choreography, live at https://threejs.plattnericus.dev, repo at https://github.com/Plattnericus/ThreeJS_Portfolio
 - StreamDeck: interactive browser desktop inspired by macOS, live at https://streamdeck.plattnericus.dev/desktop
 - Magic-Mirror: selfhosted smart display on a Raspberry Pi, live at https://magicmirror.plattnericus.dev, repo at https://github.com/Plattnericus/Magic-Mirror

@@ -38,6 +38,13 @@ Live URL: https://pokyh.com
 Description: A school-focused platform built around real student workflows: timetable, grades, absences, messages, mobile app, backend, APIs and deployment.
 Technologies: Next.js, TypeScript, API, Docker, Cloudflare
 
+### Fly Lab
+
+Live URL: https://fly.pokyh.com
+Repository: https://github.com/bedchem/fruit-fly-hub
+Description: A real fruit-fly connectome running in the browser: a CT-scanned Drosophila whose 60,001 measured neurons (MaleCNS v1.0) drive it to gamble, trade, game and code on its own — one hub of experiments on the same brain.
+Technologies: React Three Fiber, Three.js, neural simulation, Vite
+
 ### ThreeJS Portfolio
 
 Live URL: https://threejs.plattnericus.dev

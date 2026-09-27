@@ -296,11 +296,12 @@ export default function Showcase() {
           </h2>
           <div className="showcase-side">
             <p className="showcase-copy">
-              Not mockups — deployments. A school platform students open every morning, a 3D
-              portfolio, a browser desktop, a Minecraft mod on Modrinth. Everything here is
-              real, and most of it is one click away.
+              Not mockups — deployments. A school platform students open every morning, a
+              real fruit-fly brain that gambles, a 3D portfolio, a browser desktop, a
+              Minecraft mod on Modrinth. Everything here is real, and most of it is one click
+              away.
             </p>
-            {/* where you are in the row — desktop only, driven from the pin */}
+            {/* which card you are on — desktop only, driven from the pin */}
             <div className="showcase-progress" aria-hidden="true">
               <span className="sp-count">
                 <span className="sp-mask">
