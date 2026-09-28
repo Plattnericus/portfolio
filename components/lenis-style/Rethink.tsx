@@ -106,22 +106,30 @@ export default function Rethink() {
           }
         };
 
-        /* Section geometry comes from the trigger itself (start "top bottom",
-           end "bottom top"), which ScrollTrigger re-measures on every refresh —
-           no getBoundingClientRect per scroll frame, which used to force a
-           synchronous layout right after the frame's other style writes. */
+        /* Section geometry is measured once per refresh, never per scroll
+           frame (a getBoundingClientRect there forced a synchronous layout
+           right after the frame's other style writes). Its end comes from the
+           trigger ("bottom top" involves no viewport at all), the frame is the
+           sticky box itself. Nothing here may read the live innerHeight: a
+           phone's browser bar changes it by ~80px as it slides in and out,
+           without a refresh, and mixing that into the stored positions made
+           the zoom jump whenever the bar moved. */
+        let sectionHeight = section.offsetHeight;
+        let frameHeight = zoomEl?.parentElement?.offsetHeight || window.innerHeight;
+        const measureSection = () => {
+          sectionHeight = section.offsetHeight;
+          frameHeight = zoomEl?.parentElement?.offsetHeight || window.innerHeight;
+        };
         const updateProgress = (self: ScrollTrigger) => {
-          const viewportHeight = window.innerHeight;
           const scroll = window.scrollY;
-          const sectionTop = self.start + viewportHeight;
-          const sectionHeight = self.end - sectionTop;
+          const sectionTop = self.end - sectionHeight;
 
           /* Start almost as soon as the sticky composition arrives. Lenis lets
              ENTER grow underneath the preceding words instead of waiting for
              that composition to leave first. The terminal T flood stays pinned
-             to the same section end. */
-          const start = sectionTop + viewportHeight * 0.05;
-          const end = sectionTop + sectionHeight - viewportHeight;
+             to the same section end — where the sticky frame lets go. */
+          const start = sectionTop + frameHeight * 0.05;
+          const end = sectionTop + sectionHeight - frameHeight;
           const progress = clamp((scroll - start) / Math.max(1, end - start));
 
           /* Lead-in: "So we built / web experiences" + "As it should be" zoom up
@@ -194,11 +202,13 @@ export default function Rethink() {
           onLeave: updateProgress,
           onLeaveBack: updateProgress,
           onRefresh: (self) => {
+            measureSection();
             measureOrigin();
             updateProgress(self);
           },
         });
 
+        measureSection();
         measureOrigin();
         updateProgress(trigger);
 

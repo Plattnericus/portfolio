@@ -46,3 +46,7 @@ export const NO_MOTION_PREF = "(prefers-reduced-motion: no-preference)";
 
 export const MM_DESKTOP = `${BP_DESKTOP} and ${NO_MOTION_PREF}`;
 export const MM_MOBILE = `${BP_MOBILE} and ${NO_MOTION_PREF}`;
+
+/** Where the NEXOR intro is skipped and the page is live from the start:
+    phones and reduced motion (either one). */
+export const INTRO_SKIP = `(prefers-reduced-motion: reduce), ${BP_MOBILE}`;

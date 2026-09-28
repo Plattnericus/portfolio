@@ -3,9 +3,9 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { createDigitHopper } from "@/components/clawd/digitHop";
+import { PERSPECTIVE, createStackHopper } from "@/components/clawd/stackHop";
 import CursorGlow from "@/components/motion/CursorGlow";
 import PillInner from "@/components/ui/PillInner";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
@@ -26,8 +26,34 @@ const TILT = 6;
 /** When Clawd drops onto the 0, into the intro below (ms). */
 const CLAWD_ENTERS = 1050;
 
+/** Longest the intro waits for the WebGL scene to be ready (ms from mount) —
+    a slow model or a busy GPU must never hold the page. */
+const SCENE_WAIT = 1100;
+
+/** When the homepage is prefetched: once the intro has played, so its
+    download and parsing stay out of the intro's frames (ms). */
+const PREFETCH_AFTER = 2600;
+
 /** How long a line stays up (ms). */
 const TALK = 2200;
+
+/** Text Clawd can hop along: whole words (so their kerning stays), each one
+    giving under him as a piece. Screen readers get the plain line. */
+function HopText({ text }: { text: string }) {
+  return (
+    <>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {text.split(" ").map((word, index) => (
+          <Fragment key={index}>
+            {index > 0 && " "}
+            <span className="nf-word">{word}</span>
+          </Fragment>
+        ))}
+      </span>
+    </>
+  );
+}
 
 export default function NotFound() {
   const rootRef = useRef<HTMLElement | null>(null);
@@ -36,22 +62,28 @@ export default function NotFound() {
   const lineIndex = useRef(0);
   const lineTimer = useRef(0);
   const leaving = useRef(false);
-  const hopper = useRef<ReturnType<typeof createDigitHopper>>(null);
+  const hopper = useRef<ReturnType<typeof createStackHopper>>(null);
 
   useEffect(() => {
     /* the way home is the one click that matters here — have it ready */
-    router.prefetch("/");
-    return () => window.clearTimeout(lineTimer.current);
+    const prefetch = window.setTimeout(() => router.prefetch("/"), PREFETCH_AFTER);
+    return () => {
+      window.clearTimeout(prefetch);
+      window.clearTimeout(lineTimer.current);
+    };
   }, [router]);
 
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
       mm.add(NO_MOTION_PREF, () => {
+        const content = rootRef.current?.querySelector<HTMLElement>(".nf-content");
         /* same move as the homepage hero: the glyphs pull up out of their
-           masks in alternating waves, then the rest of the column follows */
-        gsap
-          .timeline({ defaults: { ease: EASE.appleOut } })
+           masks in alternating waves, then the rest of the column follows.
+           Built paused — the from-states apply right away, while the column
+           is still hidden (see .nf-content in globals.css) */
+        const intro = gsap
+          .timeline({ paused: true, defaults: { ease: EASE.appleOut } })
           .fromTo(
             ".nf-digit",
             { yPercent: 115 },
@@ -65,33 +97,38 @@ export default function NotFound() {
             0.6,
           );
 
-        /* then Clawd drops onto the 0 and starts hopping from digit to digit
-           — over to the one under the pointer, too */
-        const code = rootRef.current?.querySelector<HTMLElement>(".nf-code");
-        const hop = code ? createDigitHopper(code, () => setLine(null)) : null;
+        /* then Clawd drops onto the 0 and starts hopping about on everything
+           — the digits, the letters, the button — and over to whatever the
+           pointer is on, too */
+        const hop = content ? createStackHopper(content, () => setLine(null)) : null;
         hopper.current = hop;
-        if (!code || !hop) return;
-        hop.enter(CLAWD_ENTERS);
-        const masks = [...code.querySelectorAll<HTMLElement>(".nf-mask")];
-        const fine = window.matchMedia("(pointer: fine)");
-        const calls = masks.map((mask, index) => {
-          const call = (event: PointerEvent) => {
-            if (event.type === "pointerenter" && !fine.matches) return;
-            hop.call(index);
-          };
-          mask.addEventListener("pointerenter", call);
-          mask.addEventListener("pointerdown", call);
-          return () => {
-            mask.removeEventListener("pointerenter", call);
-            mask.removeEventListener("pointerdown", call);
-          };
-        });
-        const onResize = () => hop.resize();
+
+        /* The column rises once the starfield and the arm are ready to draw.
+           Loading three, making the WebGL context and compiling the arm's
+           shaders used to happen in the middle of the rise and froze it —
+           now they happen first, under the empty starfield. */
+        let started = false;
+        let cap = 0;
+        const start = () => {
+          if (started) return;
+          started = true;
+          window.clearTimeout(cap);
+          window.removeEventListener("nf-scene-ready", start);
+          hop?.enter(CLAWD_ENTERS);
+          intro.play();
+          if (content) content.style.visibility = "visible";
+        };
+        window.addEventListener("nf-scene-ready", start);
+        cap = window.setTimeout(start, SCENE_WAIT);
+
+        const onResize = () => hop?.resize();
         window.addEventListener("resize", onResize);
         return () => {
-          calls.forEach((off) => off());
+          window.clearTimeout(cap);
+          window.removeEventListener("nf-scene-ready", start);
           window.removeEventListener("resize", onResize);
-          hop.destroy();
+          content?.style.removeProperty("visibility");
+          hop?.destroy();
           hopper.current = null;
         };
       });
@@ -100,16 +137,33 @@ export default function NotFound() {
       mm.add(`(pointer: fine) and (min-width: 900px) and ${NO_MOTION_PREF}`, () => {
         const code = rootRef.current?.querySelector<HTMLElement>(".nf-code");
         if (!code) return;
-        gsap.set(code, { transformPerspective: 1000 });
-        const rotateX = gsap.quickTo(code, "rotationX", { duration: 0.9, ease: "power3.out" });
-        const rotateY = gsap.quickTo(code, "rotationY", { duration: 0.9, ease: "power3.out" });
+        gsap.set(code, { transformPerspective: PERSPECTIVE });
+        /* one lean, handed to the 404 and to Clawd, who leans along with it
+           while he is standing on it */
+        const lean = { x: 0, y: 0 };
+        const apply = () => {
+          if (leaving.current) return;
+          gsap.set(code, { rotationX: lean.x, rotationY: lean.y });
+          hopper.current?.tilt(lean.x, lean.y);
+        };
+        const ease = { duration: 0.9, ease: "power3.out", onUpdate: apply };
+        const rotateX = gsap.quickTo(lean, "x", ease);
+        const rotateY = gsap.quickTo(lean, "y", ease);
         const onMove = (event: PointerEvent) => {
           if (leaving.current) return;
           rotateY(((event.clientX / window.innerWidth) * 2 - 1) * TILT);
           rotateX(-((event.clientY / window.innerHeight) * 2 - 1) * TILT);
         };
         window.addEventListener("pointermove", onMove, { passive: true });
-        return () => window.removeEventListener("pointermove", onMove);
+        return () => {
+          window.removeEventListener("pointermove", onMove);
+          /* set from the tweens' updates, outside this context's record —
+             straightened by hand when the lean goes away (a narrower window) */
+          if (!leaving.current) {
+            gsap.set(code, { rotationX: 0, rotationY: 0 });
+            hopper.current?.tilt(0, 0);
+          }
+        };
       });
 
       return () => mm.revert();
@@ -154,13 +208,19 @@ export default function NotFound() {
     event.preventDefault();
     if (leaving.current) return;
     leaving.current = true;
+    /* Clawd goes with whatever he is standing on: into the warp with the
+       404, or up and away with the text */
+    const onDigits = hopper.current?.onDigits() ?? true;
     hopper.current?.stop();
     window.dispatchEvent(new Event("nf-warp"));
     const root = rootRef.current;
     const desktop = window.matchMedia("(min-width: 900px)").matches;
+    const code = root?.querySelector(".nf-code");
+    const clawdTilt = root?.querySelector(".nf-clawd-tilt");
+    const clawd = root?.querySelector(".nf-clawd");
     gsap
       .timeline()
-      .to(root?.querySelector(".nf-code") ?? [], {
+      .to([code, onDigits ? clawdTilt : null].filter(Boolean), {
         rotationX: 0,
         rotationY: 0,
         scale: 1.6,
@@ -169,7 +229,7 @@ export default function NotFound() {
         ease: "power3.in",
       })
       .to(
-        root?.querySelectorAll(".nf-rise") ?? [],
+        [...(root?.querySelectorAll(".nf-rise") ?? []), onDigits ? null : clawd].filter(Boolean),
         { y: -30, autoAlpha: 0, duration: 0.45, stagger: 0.04, ease: "power2.in" },
         0,
       )
@@ -202,14 +262,32 @@ export default function NotFound() {
               </span>
             </span>
           ))}
+        </h1>
 
-          {/* Clawd hops from digit to digit, still retrying the missing page */}
-          <button
-            type="button"
-            className="nf-clawd"
-            onClick={pokeClawd}
-            aria-label="Clawd, the site mascot — click him"
-          >
+        <p className="nf-title nf-rise">
+          <HopText text="Lost in the stack" />
+        </p>
+        <p className="nf-copy nf-rise">
+          <HopText text="This page doesn't exist — or it moved on." />
+        </p>
+
+        <div className="nf-actions nf-rise">
+          <Link className="pill" href="/" onClick={warpHome}>
+            <PillInner icon={ArrowLeft} label="Back to Nexor" roll="left" />
+          </Link>
+        </div>
+
+        {/* Clawd hops about on all of it, still retrying the missing page.
+            He lives beside the 404, not in it: the 404 leans toward the
+            pointer and the text doesn't, and he has to stand straight on
+            both (he leans along only while he is on the digits). */}
+        <button
+          type="button"
+          className="nf-clawd"
+          onClick={pokeClawd}
+          aria-label="Clawd, the site mascot — click him"
+        >
+          <span className="nf-clawd-tilt">
             <span className="nf-clawd-body">
               {line && (
                 <span className="nf-bubble" role="status">
@@ -222,17 +300,8 @@ export default function NotFound() {
                 <img src={CLAWD_SPRITES.ERROR_RETRY} alt="" width={192} height={192} draggable={false} />
               </span>
             </span>
-          </button>
-        </h1>
-
-        <p className="nf-title nf-rise">Lost in the stack</p>
-        <p className="nf-copy nf-rise">This page doesn&apos;t exist — or it moved on.</p>
-
-        <div className="nf-actions nf-rise">
-          <Link className="pill" href="/" onClick={warpHome}>
-            <PillInner icon={ArrowLeft} label="Back to Nexor" roll="left" />
-          </Link>
-        </div>
+          </span>
+        </button>
       </div>
 
       <div className="nf-curtain" aria-hidden="true" />

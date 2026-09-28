@@ -12,7 +12,7 @@ import {
   type RefObject,
 } from "react";
 import Lenis from "lenis";
-import { gsap, ScrollTrigger } from "@/lib/animation";
+import { gsap, INTRO_SKIP, ScrollTrigger } from "@/lib/animation";
 import DynamicFavicon from "@/components/motion/DynamicFavicon";
 
 type SmoothScrollContextValue = {
@@ -31,18 +31,98 @@ export function useSmoothScroll() {
   return value;
 }
 
+/** How long the page has to stand completely still before a refresh. */
+const REST_MS = 300;
+
+/**
+ * ScrollTrigger.refresh(), held back until the page is truly at rest: no
+ * finger on the screen and not a pixel of movement for REST_MS, sampled per
+ * frame. ScrollTrigger's own `refresh(true)` isn't enough — it calls the
+ * scroll over after a 200ms gap between scroll events, which a busy phone
+ * produces in the middle of a fling (a long task delays the events, not the
+ * scroll), and then refreshes mid-momentum anyway. Frames only run once the
+ * main thread is free again, and by then scrollY has caught up.
+ */
+function createRestRefresh() {
+  let frame = 0;
+  let touching = false;
+  /* a font promise can still resolve after an unmount */
+  let dead = false;
+  const onTouch = (event: TouchEvent) => {
+    touching = event.touches.length > 0;
+  };
+  const touchEvents = ["touchstart", "touchend", "touchcancel"] as const;
+  touchEvents.forEach((type) => window.addEventListener(type, onTouch, { passive: true }));
+
+  const request = () => {
+    if (frame || dead) return;
+    let y = window.scrollY;
+    let stillSince = -1;
+    const step = (now: number) => {
+      if (touching || window.scrollY !== y) {
+        y = window.scrollY;
+        stillSince = -1;
+      } else if (stillSince < 0) {
+        stillSince = now;
+      }
+      if (stillSince >= 0 && now - stillSince >= REST_MS) {
+        frame = 0;
+        ScrollTrigger.refresh();
+        return;
+      }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+  };
+
+  const destroy = () => {
+    dead = true;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    touchEvents.forEach((type) => window.removeEventListener(type, onTouch));
+  };
+
+  return { request, destroy };
+}
+
 export default function SmoothScrollProvider({ children }: { children: ReactNode }) {
   const lenisRef = useRef<Lenis | null>(null);
+  const restRefreshRef = useRef<ReturnType<typeof createRestRefresh> | null>(null);
   const [introDone, setIntroDone] = useState(false);
   const completeIntro = useCallback(() => setIntroDone(true), []);
 
   useEffect(() => {
-    const refresh = () => ScrollTrigger.refresh();
+    /* A ScrollTrigger.refresh() parks the page at scroll 0 while it measures
+       and then writes the old position back. Mid-swipe that kills a phone's
+       momentum, and the position written back is the one from the last
+       scroll event — a few frames stale at speed, so the page stopped and
+       slid back. Phones skip the intro, so the late load and font refreshes
+       landed right in the first swipes. They now wait for the page to be at
+       rest, and ScrollTrigger's own load listener (which forces one) is off. */
+    ScrollTrigger.config({
+      ignoreMobileResize: true,
+      autoRefreshEvents: "visibilitychange,resize",
+    });
+    const atRest = createRestRefresh();
+    restRefreshRef.current = atRest;
+    const refresh = () => atRest.request();
     document.fonts?.ready.then(refresh).catch(() => {});
-    window.addEventListener("load", refresh, { once: true });
+    if (document.readyState === "complete") refresh();
+    else window.addEventListener("load", refresh, { once: true });
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return () => window.removeEventListener("load", refresh);
+    /* Lenis only smooths wheels (syncTouch is off), so on a touch-only
+       device it adds nothing but its touchstart/touchmove listeners — which
+       are non-passive, so every swipe had to wait for the main thread (the
+       WebGL scene, the clip mirrors) before the page could start to move. */
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches
+    ) {
+      return () => {
+        window.removeEventListener("load", refresh);
+        atRest.destroy();
+        restRefreshRef.current = null;
+      };
     }
 
     const lenis = new Lenis({
@@ -57,10 +137,11 @@ export default function SmoothScrollProvider({ children }: { children: ReactNode
     const tick = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
-    ScrollTrigger.config({ ignoreMobileResize: true });
 
     return () => {
       window.removeEventListener("load", refresh);
+      atRest.destroy();
+      restRefreshRef.current = null;
       gsap.ticker.remove(tick);
       lenis.destroy();
       lenisRef.current = null;
@@ -155,15 +236,22 @@ export default function SmoothScrollProvider({ children }: { children: ReactNode
     };
   }, []);
 
-  /* hold the page still behind the intro loader, release on completion */
+  /* hold the page still behind the intro loader, release on completion.
+     Where there is no intro (phones) nothing is held: the page is already
+     scrollable before hydration, and locking it for that one render stopped
+     a swipe that had started on the server-rendered page. */
   useEffect(() => {
+    const skipped = window.matchMedia(INTRO_SKIP).matches;
     if (introDone) {
       document.documentElement.classList.remove("no-scroll");
       lenisRef.current?.start();
       /* make sure the ticker is running for the hero handoff timeline */
       gsap.ticker.wake();
-      ScrollTrigger.refresh();
-    } else {
+      /* behind the intro the page is held at the top; without one it may
+         already be moving under a finger */
+      if (skipped) restRefreshRef.current?.request();
+      else ScrollTrigger.refresh();
+    } else if (!skipped) {
       document.documentElement.classList.add("no-scroll");
       lenisRef.current?.stop();
     }

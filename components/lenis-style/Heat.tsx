@@ -127,11 +127,14 @@ export default function Heat() {
           },
         });
 
-        let viewportWidth = window.innerWidth;
+        /* the layout width: Safari's innerWidth follows a pinch zoom, and a
+           forced refresh in the middle of one parks the page at 0 and back */
+        const layoutWidth = () => document.documentElement.clientWidth;
+        let viewportWidth = layoutWidth();
         let refreshFrame = 0;
         const refreshAfterWidthChange = () => {
-          if (window.innerWidth === viewportWidth) return;
-          viewportWidth = window.innerWidth;
+          if (layoutWidth() === viewportWidth) return;
+          viewportWidth = layoutWidth();
           window.cancelAnimationFrame(refreshFrame);
           refreshFrame = window.requestAnimationFrame(() => {
             ScrollTrigger.refresh();

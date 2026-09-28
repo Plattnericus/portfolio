@@ -27,7 +27,8 @@ Fullstack development, DevOps and security — real software, deployed and runni
   <a href="#projects">Projects</a> ·
   <a href="#under-the-hood">Under the hood</a> ·
   <a href="#getting-started">Getting started</a> ·
-  <a href="#project-structure">Structure</a>
+  <a href="#project-structure">Structure</a> ·
+  <a href="#license">License</a>
 </p>
 
 </div>
@@ -289,7 +290,23 @@ lib/
 Type: **Panchang** by Indian Type Foundry via Fontshare
 ([licence](public/fonts/Panchang-LICENSE.txt)), **UnifrakturCook** by j. 'mach'
 wust and Peter Wiegel ([OFL](public/fonts/UnifrakturCook/OFL.txt)), **Anton** and
-**Roboto** from Google Fonts. The GitHub mark belongs to GitHub.
+**Roboto** from Google Fonts. Clawd is the mascot of Anthropic's Claude Code. The
+GitHub mark belongs to GitHub.
+
+## License
+
+Free to use, change and ship — **with credit**. The code, styles and animations
+are under the [Nexor Attribution License](LICENSE): anything built on them has to
+show a visible
+
+> Based on work by Nexor / Plattnericus
+
+in its footer or on a credits page linked from every page, linking to
+[plattnericus.dev](https://plattnericus.dev) or
+[github.com/Plattnericus](https://github.com/Plattnericus), and keep the licence
+in its source. The names Nexor and Plattnericus, the NEXOR wordmark and the
+personal content (texts, project clips and posters) are not licensed — swap in
+your own. Fonts, Clawd, the 3D arm model and dependencies keep their own terms.
 
 ## Deployment
 

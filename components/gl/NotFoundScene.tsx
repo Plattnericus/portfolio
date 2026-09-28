@@ -9,6 +9,7 @@ import {
   NORMALIZED_ARM_HEIGHT,
   RAW_ARM_HEIGHT,
   orangeHandMaterial,
+  preloadArm,
   useChromeArm,
 } from "./arm";
 import { GLErrorBoundary, detectWebGL2Support } from "./safety";
@@ -151,18 +152,43 @@ function Starfield({ count }: { count: number }) {
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
 /** The homepage's first-act pose (reaching up, palm turned in), rising in from
-    below over the first seconds and then breathing with the pointer. */
+    below over the first seconds and then breathing with the pointer.
+    Its shaders are compiled up front, off the main thread where the browser
+    can: three otherwise compiles a material the first time its mesh enters
+    the view, and the arm rising into the frame froze the page for a moment,
+    right while the 404 was landing. It waits below the frame until then, and
+    the page holds its reveal for the "nf-scene-ready" this sends. */
 function ReachingHand() {
   const group = useRef<THREE.Group>(null);
   const { width, height } = useThree((state) => state.viewport);
+  const gl = useThree((state) => state.gl);
+  const camera = useThree((state) => state.camera);
+  const scene = useThree((state) => state.scene);
+  const clock = useThree((state) => state.clock);
   const arm = useChromeArm(ARM_MODEL_URL, NORMALIZED_ARM_HEIGHT, orangeHandMaterial);
   const portrait = width < height;
+  /* scene time the compile finished at; it rises from then on */
+  const readyAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const done = () => {
+      if (!live) return;
+      readyAt.current = clock.elapsedTime;
+      window.dispatchEvent(new Event("nf-scene-ready"));
+    };
+    gl.compileAsync(scene, camera).then(done, done);
+    return () => {
+      live = false;
+    };
+  }, [gl, camera, scene, clock, arm.scene]);
 
   useFrame(({ clock, pointer }) => {
     const rig = group.current;
     if (!rig) return;
     const t = clock.elapsedTime;
-    const rise = easeOutCubic(THREE.MathUtils.clamp((t - 0.35) / 1.9, 0, 1));
+    const from = readyAt.current === null ? Infinity : Math.max(0.35, readyAt.current);
+    const rise = easeOutCubic(THREE.MathUtils.clamp((t - from) / 1.9, 0, 1));
     const sway = Math.sin(t * 0.7);
     const x = (portrait ? 0.2 : 0.24) * width + pointer.x * 0.18;
     const y =
@@ -221,7 +247,14 @@ export default function NotFoundScene() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (!detectWebGL2Support()) return;
+    /* no scene coming: nothing for the page to wait for */
+    if (!detectWebGL2Support()) {
+      window.dispatchEvent(new Event("nf-scene-ready"));
+      return;
+    }
+    /* the model downloads while the canvas is being set up, instead of
+       only once the hand asks for it — the intro waits for it */
+    preloadArm();
     /* deferred a frame so setState stays out of the effect body itself */
     const raf = requestAnimationFrame(() =>
       setMode({ compact: window.matchMedia("(max-width: 899px)").matches }),

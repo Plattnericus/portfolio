@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import NexorWordmark from "@/components/brand/NexorWordmark";
 import { useSmoothScroll } from "@/components/providers/SmoothScrollProvider";
+import { INTRO_SKIP } from "@/lib/animation";
 
 /* The original ~3.3s intro spent roughly 400ms of that just standing still,
    waiting on a floor well past the point the glyphs had finished rising.
@@ -34,11 +35,7 @@ export default function IntroLoader() {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const skipIntro =
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-      window.matchMedia("(max-width: 899px)").matches;
-
-    if (skipIntro) {
+    if (window.matchMedia(INTRO_SKIP).matches) {
       /* Mobile uses the direct hero reveal and skips the heavy intro. */
       const release = window.setTimeout(() => {
         completeIntro();

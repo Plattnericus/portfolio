@@ -2049,8 +2049,11 @@ html:not(.has-cursor) .sc-visual:hover .sc-arrow svg {
 /* ------------------------------------------------------------------ */
 
 @media (max-width: 899px) {
+  /* svh, not dvh: dvh follows the browser bar as it slides in and out while
+     you scroll, and the hero growing or shrinking by those ~80px shoved the
+     whole page below it along — it read as the page scrolling back */
   .hero {
-    min-height: 100dvh;
+    min-height: 100svh;
     padding-top: max(clamp(0.6rem, 2svh, 2rem), env(safe-area-inset-top));
     padding-right: max(clamp(1.2rem, 3vw, 2.6rem), env(safe-area-inset-right));
     padding-bottom: max(clamp(1.4rem, 3svh, 2.4rem), env(safe-area-inset-bottom));
@@ -2489,7 +2492,19 @@ html.has-cursor [data-cursor] * {
   pointer-events: none;
 }
 
+/* The cursor's own box is empty — its dot, ring and badge are fixed — but as
+   a grid item it took a row of the free space and pushed the column well
+   below the middle (on a phone held sideways, the button off the bottom).
+   Out of the grid, the column is centred on its own. */
+.nf > .cursor-layer {
+  position: absolute;
+}
+
+/* --nf is the digits' size; Clawd and the room he hops in are sized off
+   it. They live up here because he is the 404's neighbour, not its child. */
 .nf-content {
+  --nf: clamp(6rem, min(32vw, 44vh), 22rem);
+  --nf-clawd: calc(var(--nf) * 0.4);
   position: relative;
   z-index: 1;
   width: min(100%, 56rem);
@@ -2499,11 +2514,25 @@ html.has-cursor [data-cursor] * {
   text-align: center;
 }
 
-/* --nf is the digits' size; Clawd and the room he hops in are sized off it.
-   The top margin is his height above the digits plus the top of his hops. */
+/* Held out of sight until the intro takes it over (not-found.tsx), so the
+   server-rendered 404 can't flash up and then vanish into its masks when
+   the page wakes up. Only where scripts run and motion is welcome — and a
+   failsafe shows it anyway should the page never wake up. */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .nf-content {
+    visibility: hidden;
+    animation: nf-failsafe 0s linear 4s forwards;
+  }
+}
+
+@keyframes nf-failsafe {
+  to {
+    visibility: visible;
+  }
+}
+
+/* The top margin is his height above the digits plus the top of his hops. */
 .nf-code {
-  --nf: clamp(6rem, min(32vw, 44vh), 22rem);
-  --nf-clawd: calc(var(--nf) * 0.4);
   position: relative;
   display: flex;
   justify-content: center;
@@ -2518,21 +2547,22 @@ html.has-cursor [data-cursor] * {
 /* his pixel grid is 96px: at a multiple of 48px every art pixel is a whole
    number of device pixels on a 2x screen, so the edges stay perfectly even */
 @supports (width: round(1px, 1px)) {
-  .nf-code {
+  .nf-content {
     --nf-clawd: round(nearest, calc(var(--nf) * 0.4), 48px);
   }
 }
 
-/* Clawd starts on the tip of the 0: its ink is 0.052em below the digit's
-   box where his inner feet stand (measured from the glyph), his feet are
-   68.2% down his sprite and his body 40.6% across it.
+/* Clawd starts on the tip of the 0: the 404 sits its top margin down the
+   column, the 0's ink is 0.052em below the digit's box where his inner feet
+   stand (measured from the glyph), his feet are 68.2% down his sprite and
+   his body 40.6% across it. He is drawn over everything he hops onto.
    Only the sprite takes the pointer — the button stays behind on the 0
    while he hops about. */
 .nf-clawd {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   left: 50%;
-  top: calc(var(--nf) * 0.052 - var(--nf-clawd) * 0.6823);
+  top: calc(var(--nf-clawd) * 0.75 + var(--nf) * 0.052 - var(--nf-clawd) * 0.6823);
   width: var(--nf-clawd);
   margin-left: calc(var(--nf-clawd) * -0.40625);
   padding: 0;
@@ -2542,15 +2572,33 @@ html.has-cursor [data-cursor] * {
   pointer-events: none;
 }
 
+.nf-clawd-tilt,
 .nf-clawd-body,
 .nf-clawd-lean {
   position: relative;
   display: block;
 }
 
-/* the lean of a hop turns about the middle of his body */
+/* the lean of a hop turns about the middle of his body.
+   He is the button's own orange: standing on its letters he melted into it.
+   There he gets a one-art-pixel outline in the page's dark — the same dark
+   he stands out against everywhere else, so it only ever shows on the
+   button. The shadows are always there (transparent) so it can fade. */
 .nf-clawd-lean {
+  --nf-px: max(1px, calc(var(--nf-clawd) / 96));
   transform-origin: 40.625% 50.5%;
+  filter: drop-shadow(var(--nf-px) 0 0 transparent)
+    drop-shadow(calc(var(--nf-px) * -1) 0 0 transparent)
+    drop-shadow(0 var(--nf-px) 0 transparent)
+    drop-shadow(0 calc(var(--nf-px) * -1) 0 transparent);
+  transition: filter 0.3s ease;
+}
+
+.nf-clawd.is-on-button .nf-clawd-lean {
+  filter: drop-shadow(var(--nf-px) 0 0 var(--dark))
+    drop-shadow(calc(var(--nf-px) * -1) 0 0 var(--dark))
+    drop-shadow(0 var(--nf-px) 0 var(--dark))
+    drop-shadow(0 calc(var(--nf-px) * -1) 0 var(--dark));
 }
 
 .nf-clawd img {
@@ -2560,6 +2608,11 @@ html.has-cursor [data-cursor] * {
   image-rendering: pixelated;
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* standing on the button, he lets the click through to it */
+.nf-clawd.is-on-button img {
+  pointer-events: none;
 }
 
 .nf-clawd:focus-visible img {
@@ -2654,6 +2707,13 @@ html.has-cursor [data-cursor] * {
   letter-spacing: 0.02em;
 }
 
+/* a word he lands on gives under him as one piece (HopText) */
+.nf-word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
 .nf-copy {
   margin-top: 0.8rem;
   font-size: clamp(0.95rem, 1.1vw, 1.05rem);
@@ -2668,9 +2728,11 @@ html.has-cursor [data-cursor] * {
 }
 
 @media (max-width: 899px) {
-  /* phones are mostly 3x screens: 64px is two device pixels per art pixel */
-  .nf-code {
-    --nf: clamp(6rem, 42vw, 12rem);
+  /* phones are mostly 3x screens: 64px is two device pixels per art pixel.
+     The height caps the digits too, for a phone held sideways — held
+     upright, 42vw is always the smaller one. */
+  .nf-content {
+    --nf: clamp(6rem, min(42vw, 30vh), 12rem);
     --nf-clawd: 64px;
   }
 
@@ -2681,6 +2743,14 @@ html.has-cursor [data-cursor] * {
   .nf-actions .pill {
     width: 100%;
     min-width: 0;
+  }
+}
+
+/* a phone held sideways: the column has to fit the height, so the page's
+   top and bottom room shrinks with it */
+@media (max-height: 520px) {
+  .nf {
+    padding-block: clamp(0.75rem, 4vh, 1.5rem);
   }
 }
 

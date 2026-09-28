@@ -240,11 +240,14 @@ export default function ClawdPet() {
     let lastY = window.scrollY;
     const onScroll = () => {
       syncHero();
-      if (window.scrollY !== lastY) {
+      const moved = window.scrollY - lastY;
+      if (moved !== 0) {
         lastY = window.scrollY;
         wake();
       }
-      const signed = lenisRef.current?.velocity ?? 0;
+      /* phones scroll natively, without Lenis: there the speed is what this
+         200ms poll moved, per 60 Hz frame like Lenis's own */
+      const signed = lenisRef.current ? lenisRef.current.velocity : moved / 12;
       const velocity = Math.abs(signed);
       if (velocity > 40) {
         if (!velocityStart) velocityStart = performance.now();

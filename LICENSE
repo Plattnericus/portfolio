@@ -1,0 +1,54 @@
+Nexor Attribution License
+
+Copyright (c) 2026 Nexor / Plattnericus
+https://plattnericus.dev · https://github.com/Plattnericus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the source code, styles and documentation in this repository (the
+"Software"), to use, copy, modify, merge, publish, distribute, sublicense
+and/or sell copies of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
+
+1. Visible credit. Anything that uses the Software or a substantial part of
+   it (a website, an app, a template, a modified version, a single component
+   or animation) must credit the author where its visitors or users can see
+   it: on the site or in the app itself, in its footer or on a credits or
+   about page that is linked from every page, with the words
+
+       Based on work by Nexor / Plattnericus
+
+   (or the same in the language of the site), linked to
+   https://plattnericus.dev or https://github.com/Plattnericus.
+   The credit must stay readable. It may not be removed, hidden, covered or
+   made too small or too faint to read.
+
+2. Credit in the source. The copyright notice above and this license must be
+   kept in all copies or substantial portions of the Software. A repository
+   that contains them must say in its README that it is based on
+   https://github.com/Plattnericus/portfolio.
+
+3. Your own identity. This license does not cover the names "Nexor" and
+   "Plattnericus", the NEXOR wordmark, or the author's own content: the texts
+   about the author, the project descriptions, the project clips and posters
+   (public/projects/, public/showcase/), the link preview images and the
+   profile files in public/ (llms.txt, llms-full.txt, ai.txt, humans.txt).
+   All rights to them are reserved. Replace them with your own, and do not
+   present your work as made or endorsed by the author beyond the credit
+   above.
+
+4. Other people's work. The fonts (Panchang, UnifrakturCook, Anton, Roboto),
+   the Clawd character and its sprites (Clawd is the mascot of Anthropic's
+   Claude Code), the 3D arm model (public/models/arm/), the GitHub mark and
+   all dependencies are not covered by this license. Each remains under its
+   own terms.
+
+5. No credit, no license. If you do not meet conditions 1 to 3, this license
+   gives you no permission to use the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
