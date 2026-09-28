@@ -77,20 +77,13 @@ export const metadata: Metadata = {
     title: siteConfig.title,
     description: siteConfig.description,
     locale: siteConfig.locale,
-    images: [
-      {
-        url: absoluteUrl("/opengraph-image"),
-        width: 1200,
-        height: 630,
-        alt: "Nexor / Plattnericus premium developer landing page",
-      },
-    ],
+    /* the image itself is app/opengraph-image.jpg (and twitter-image.jpg):
+       a frame of the real hero, picked up by Next with a hashed URL */
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.title,
     description: siteConfig.description,
-    images: [absoluteUrl("/twitter-image")],
   },
   robots: {
     index: true,

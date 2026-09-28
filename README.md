@@ -7,7 +7,7 @@
 <h1>plattnericus.dev</h1>
 
 <p><strong>The personal site of Nexor / Plattnericus</strong><br />
-Fullstack developer from South Tyrol, Italy — building, deploying and securing real software.</p>
+Fullstack development, DevOps and security — real software, deployed and running.</p>
 
 <p>
   <a href="https://plattnericus.dev"><img src="https://img.shields.io/badge/live-plattnericus.dev-d97757?style=for-the-badge&labelColor=0b0908" alt="Live site" /></a>
@@ -36,10 +36,10 @@ Fullstack developer from South Tyrol, Italy — building, deploying and securing
 
 <table align="center">
   <tr>
-    <td align="center" width="160"><h3>249 KB</h3><sub>gzipped JS on<br />first load</sub></td>
-    <td align="center" width="160"><h3>0.00</h3><sub>layout shift across<br />ten screen setups</sub></td>
-    <td align="center" width="160"><h3>120 Hz</h3><sub>mascot flights, up to<br />the display's rate</sub></td>
-    <td align="center" width="160"><h3>7</h3><sub>live projects, one<br />click away</sub></td>
+    <td align="center" width="170"><h3>222 KB</h3><sub>compressed JS by<br />the load event</sub></td>
+    <td align="center" width="170"><h3>0.00</h3><sub>layout shift, phone<br />to 1080p desktop</sub></td>
+    <td align="center" width="170"><h3>120 fps</h3><sub>with four project clips<br />looping at once</sub></td>
+    <td align="center" width="170"><h3>7</h3><sub>live projects, each with<br />demo and source</sub></td>
   </tr>
 </table>
 
@@ -58,8 +58,8 @@ polished silver once the page turns cream.
     <td width="50%"><img src=".github/readme/work.webp" alt="Nexor runs live — the pinned project row" /></td>
   </tr>
   <tr>
-    <td><sub><strong>Why full stack?</strong> — the rule beside the title fills as you read, the beat in focus takes the floor.</sub></td>
-    <td><sub><strong>Nexor runs live</strong> — a pinned row of real deployments, every clip playing, every card a link.</sub></td>
+    <td><sub><strong>Why full stack?</strong> — the headline holds still while the beats scroll past; the one you are reading takes the floor.</sub></td>
+    <td><sub><strong>Nexor runs live</strong> — a pinned row of real deployments, every clip on screen looping, each with a live demo and its source.</sub></td>
   </tr>
   <tr>
     <td><img src=".github/readme/github.webp" alt="The GitHub mark at the end of the row with Clawd sitting on it" /></td>
@@ -78,6 +78,25 @@ polished silver once the page turns cream.
     <td><sub><strong>Open to projects and ideas</strong> — the headline slides up out of its masks, the hand turns one last time.</sub></td>
   </tr>
 </table>
+
+### Live demo, or the source
+
+<img align="right" src=".github/readme/source.webp" alt="Hovering Source code turns the clip into glyphs and types out the repository" width="340" />
+
+Every project card has two quiet buttons. Hovering one previews where it leads,
+right on the clip:
+
+- **Live demo** types the site's address into a chip at the foot of the clip.
+- **Source code** scans the footage into glyphs — the clip, redrawn as code
+  punctuation in the page's terracotta and cream, sweeping in behind a
+  flickering scan head — and types out the repository.
+
+The glyphs follow the clip as it plays, line up with the footage at the scan
+edge (hover zoom and scroll parallax included), and stay legible on bright and
+dark scenes alike. On a phone, pressing a button shows the same preview; with a
+keyboard, focusing it does.
+
+<br clear="right" />
 
 <img align="right" src=".github/readme/mobile.webp" alt="The site on a phone" width="210" />
 
@@ -100,23 +119,23 @@ polished silver once the page turns cream.
   scroll choreography, and a short notice in the visitor's own language — one
   of fifty — explaining why the page is calm, loaded only for those visitors.
 - **Phones** get their own layout for every section rather than a squeezed
-  desktop one.
+  desktop one — held sideways, too.
 
 <br clear="right" />
 
 ## Projects
 
-Everything in the row is deployed and one click away.
+Everything in the row is deployed and one click away — and so is its code.
 
-| Project | What it is | Built with | Link |
-|---|---|---|---|
-| **POKYH** | School platform: timetable, grades, absences, messages | Next.js, TypeScript, Docker, Cloudflare | [pokyh.com](https://pokyh.com) |
-| **Fly Lab** | A real fruit-fly connectome — 60,001 neurons — simulated in the browser | React Three Fiber, Three.js, Vite | [fly.pokyh.com](https://fly.pokyh.com) |
-| **ThreeJS Portfolio** | Immersive 3D portfolio with camera choreography | Three.js, WebGL, GLSL | [threejs.plattnericus.dev](https://threejs.plattnericus.dev) |
-| **StreamDeck** | A browser desktop with app-like windows | React, JavaScript | [streamdeck.plattnericus.dev](https://streamdeck.plattnericus.dev/desktop) |
-| **Magic-Mirror** | Selfhosted smart display on a Raspberry Pi | Node.js, Raspberry Pi | [magicmirror.plattnericus.dev](https://magicmirror.plattnericus.dev) |
-| **Minesweeper** | The classic, rebuilt from scratch | Grid algorithms, UI | [minesweeper.plattnericus.dev](https://minesweeper.plattnericus.dev) |
-| **ProjectilePreview-Mod** | Minecraft mod that draws projectile paths in real time | Java, modding | [Modrinth](https://modrinth.com/mod/projectile.preview) |
+| Project | What it is | Built with | Live | Source |
+|---|---|---|---|---|
+| **POKYH** | School platform: timetable, grades, absences, messages | Next.js, TypeScript, Docker, Cloudflare | [pokyh.com](https://pokyh.com) | [bedchem/POKYH](https://github.com/bedchem/POKYH) |
+| **Fly Lab** | A real fruit-fly connectome — 60,001 neurons — simulated in the browser | React Three Fiber, Three.js, Vite | [fly.pokyh.com](https://fly.pokyh.com) | [bedchem/fruit-fly-hub](https://github.com/bedchem/fruit-fly-hub) |
+| **ThreeJS Portfolio** | Immersive 3D portfolio with camera choreography | Three.js, WebGL, GLSL | [threejs.plattnericus.dev](https://threejs.plattnericus.dev) | [Plattnericus/Stargazer_Tree](https://github.com/Plattnericus/Stargazer_Tree) |
+| **StreamDeck** | A browser desktop with app-like windows | React, JavaScript | [streamdeck.plattnericus.dev](https://streamdeck.plattnericus.dev/desktop) | [Plattnericus/StreamDeck](https://github.com/Plattnericus/StreamDeck) |
+| **Magic-Mirror** | Selfhosted smart display on a Raspberry Pi | Node.js, Raspberry Pi | [magicmirror.plattnericus.dev](https://magicmirror.plattnericus.dev) | [bedchem/Magic-Mirror](https://github.com/bedchem/Magic-Mirror) |
+| **Minesweeper** | The classic, rebuilt as real-time multiplayer | Grid algorithms, Socket.IO | [minesweeper.plattnericus.dev](https://minesweeper.plattnericus.dev) | [bedchem/Minesweeper](https://github.com/bedchem/Minesweeper) |
+| **ProjectilePreview-Mod** | Minecraft mod that draws projectile paths in real time | Java, Fabric | [Modrinth](https://modrinth.com/mod/projectile.preview) | [Ryhox/ProjectilePreview-Mod](https://github.com/Ryhox/ProjectilePreview-Mod) |
 
 The list lives in [`lib/projects.ts`](lib/projects.ts) and feeds the row, the
 structured data, the sitemap and the crawler-readable [`/ai`](https://plattnericus.dev/ai) page.
@@ -131,6 +150,9 @@ warp-tunnel starfield in step — no state passed between the two layers.
 **Pins that don't shift the page.** The pinned sections are CSS `sticky`, sized
 by script before each ScrollTrigger refresh, never GSAP's `position: fixed` pin
 — that is what keeps layout shift at zero, even across resizes and rotations.
+The project row sizes its cards by the screen's height as well as its width, so
+the heading, the clips and their buttons fit a short laptop screen with room to
+breathe.
 
 **Compositor-first motion.** Every one of Clawd's jumps — crouch, arc, lean,
 squash, landing, the spot giving under him — is baked into keyframes up front,
@@ -141,25 +163,39 @@ main thread is blocked. A jump that cuts another short picks up his speed
 mid-air instead of stopping dead. Scroll-driven writes only touch `transform`
 and `opacity`, and only when a value actually changes.
 
-**One clip at a time.** With two or more videos playing, Chrome treats a page
-like a video call and runs the whole display at the videos' 30 Hz — every
-animation on it included (measured on a 120 Hz Mac: 121 fps with one clip, 31
-with two). So only the clip under the middle of the screen plays; the others
-hold their frame until it's their turn.
+**Every clip plays, at full frame rate.** With two or more videos playing,
+Chrome treats a page like a video call and runs the whole display at the
+videos' 30 Hz — every animation on it included (measured on a 120 Hz Mac: 121
+fps with one clip, 31 with three). A clip painted into a canvas doesn't count
+as a video, so each `<video>` plays on unseen and every frame it decodes is
+copied onto a canvas in its place, driven by `requestVideoFrameCallback`
+(~0.2 ms a frame). Result: four clips looping side by side at 120 fps. A clip
+the browser pauses on its own is started again.
+
+**The source-code scan stays off the main thread.** At most once per video
+frame, the visible crop of the clip is shrunk to one pixel per glyph cell with
+`createImageBitmap` and handed to a Web Worker, which reads it back, works out
+each cell's glyph and colour, and sets them on an `OffscreenCanvas`; the page
+only draws the finished layer, cut off at the scan head. Reading a video frame
+back from the GPU stalls whichever thread asks, so it's the worker's thread
+that waits — the page holds 120 fps through the whole scan. Browsers without
+the pieces for that fall back to doing the same work on the page.
 
 **Nothing loads before it has to.**
 
 | Piece | Budget |
 |---|---|
-| First load | 249 KB of gzipped JS; the 3D bundle (Three.js + R3F) loads after it, off the critical path |
-| Project clips | 3.4 MB for all seven, H.264 at 912×684, fetched only after the intro and within two screens of view, one playing at a time |
+| First load | 222 KB of compressed JS by the load event; the 3D bundle (Three.js + R3F) loads after it, off the critical path |
+| Project clips | 3.4 MB for all seven, H.264 at 912×684, fetched only after the intro and within two screens of view; only clips on screen play |
 | 3D | a single 84 KB arm model, loaded through three's own `GLTFLoader` — no decoders shipped for compression it doesn't use |
+| Source-code scan | built on first hover; its worker starts then, and its canvases only hold a bitmap while the scan shows |
 | Mascot | 48 KB for all 22 clips, warmed up at low priority once the page is idle, desktop only |
 | Caching | clips, model, posters and fonts cached for a week with stale-while-revalidate |
 
 **Built for machines as well as people.** JSON-LD for the person, site and every
-project, a sitemap with image entries, `robots.ts`, and `llms.txt` /
-`llms-full.txt` / `ai.txt` summaries for answer-engine crawlers.
+project — each with its code repository — a sitemap with image entries,
+`robots.ts`, and `llms.txt` / `llms-full.txt` / `ai.txt` summaries for
+answer-engine crawlers.
 
 ## Getting started
 
@@ -197,10 +233,12 @@ app/
   not-found.tsx             404: starfield, orange arm, Clawd hopping across the digits
   ai/                        crawler-readable profile page
   robots.ts, sitemap.ts       search surface
-  *-image.tsx, icon.tsx        generated Open Graph images and icons
+  *-image.jpg, icon.tsx        link-preview image (a frame of the real hero) and icons
 
 components/
-  lenis-style/   the sections — Hero, Why, Showcase, Rethink, Solution, Heat, Footer
+  lenis-style/   the sections — Hero, Why, Showcase, Rethink, Solution, Heat, Footer —
+                 and the project card: its clip (painted onto a canvas), the two
+                 buttons, and the source-code scan with its worker
   gl/            the scroll-synced R3F scene, the 404 scene, the shared arm, WebGL guards
   clawd/         the mascot, his jump engine, the GitHub-mark flights, the 404 hops
   loader/        the NEXOR intro
@@ -210,7 +248,7 @@ components/
   brand/         the wordmark
 
 lib/
-  projects.ts    the project row
+  projects.ts    the project row: live sites, repositories, clips
   site.ts        identity and metadata config
   animation.ts   GSAP setup, eases, breakpoints
   clawd.ts       mascot clips and lines
@@ -226,8 +264,9 @@ lib/
   4:3 with `object-fit: cover`, so anything outside a centred 4:3 crop is never
   seen. Clips whose last seconds differ from their first get a short crossfade
   from tail to head so they loop without a jump.
-- **Posters** (`public/showcase/`) are only listed in the sitemap for image
-  search — 1200px WebP.
+- **Posters** (`public/showcase/`) are listed in the sitemap for image search —
+  1200px WebP — and stand in for a clip in the source-code scan until its first
+  frame has decoded.
 - **Clawd's clips** (`public/models/mascot/webp/`) are pixel art on a 96px grid,
   stored at exactly 2x as lossless animated WebP — frame for frame identical to
   the source GIFs at a fraction of their size — and drawn with
@@ -236,6 +275,11 @@ lib/
   he lands on is lined up with those two (`FEET` and `BODY_X` in
   `components/clawd/motion.ts`). Bump `ASSET_VERSION` in `lib/clawd.ts` whenever
   they are regenerated.
+- **The link preview** (`app/opengraph-image.jpg`, `app/twitter-image.jpg`) is
+  a frame of the real hero, rendered by the site itself at 2x — wordmark,
+  starfield, the orange hand — with the page chrome hidden and only the domain
+  added, then downscaled to 1200×630 and saved as an ~90 KB JPEG, small enough
+  for every messenger's preview.
 - **The NEXOR face** is an inlined subset of UnifrakturCook (only N E X O R, the
   digits and the space). A new letter in the wordmark means regenerating it from
   `public/fonts/UnifrakturCook/` — see the comment in `globals.css`.
@@ -254,5 +298,5 @@ Deployed on [Vercel](https://vercel.com), straight from `main`.
 <br />
 
 <div align="center">
-  <sub>Built by <a href="https://github.com/Plattnericus">Nexor / Plattnericus</a> in South Tyrol · <a href="mailto:mailme@plattnericus.dev">mailme@plattnericus.dev</a></sub>
+  <sub>Built by <a href="https://github.com/Plattnericus">Nexor / Plattnericus</a> · <a href="https://plattnericus.dev">plattnericus.dev</a></sub>
 </div>

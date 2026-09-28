@@ -11,7 +11,7 @@ const MAGNET_MAX = 12;
 
 /**
  * Custom cursor accent: a dot plus a lagging ring that grows over links. Over
- * anything with a data-cursor attribute (the project cards) the ring gives way
+ * anything with a data-cursor attribute (the project clips) the ring gives way
  * to a small dark label floating beside the dot, and the native pointer is
  * hidden there. Colours follow the page's dark/cream halves (html[data-light], set
  * by Rethink), and pills are pulled a little toward the pointer.

@@ -34,7 +34,7 @@ const jsonLd = {
       },
       primaryImageOfPage: {
         "@type": "ImageObject",
-        url: absoluteUrl("/opengraph-image"),
+        url: absoluteUrl("/opengraph-image.jpg"),
         width: 1200,
         height: 630,
       },
@@ -53,7 +53,7 @@ const jsonLd = {
       alternateName: ["Nexor", "Plattnericus"],
       url: siteConfig.url,
       email: `mailto:${siteConfig.email}`,
-      image: absoluteUrl("/opengraph-image"),
+      image: absoluteUrl("/opengraph-image.jpg"),
       sameAs: [
         siteConfig.github,
         siteConfig.modrinth,

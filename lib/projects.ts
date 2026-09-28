@@ -31,7 +31,7 @@ export const projects: Project[] = [
       "A school-focused platform built around real student workflows: timetable, grades, absences, messages, mobile app, backend, APIs and deployment.",
     tech: ["Next.js", "TypeScript", "API", "Docker", "Cloudflare"],
     liveUrl: "https://pokyh.com",
-    githubUrl: "https://github.com/Plattnericus",
+    githubUrl: "https://github.com/bedchem/POKYH",
     preview: {
       kind: "video",
       src: "/projects/pokyh.mp4",
@@ -59,13 +59,13 @@ export const projects: Project[] = [
   {
     name: "ThreeJS Portfolio",
     slug: "threejs-portfolio",
-    repoName: "ThreeJS_Portfolio",
+    repoName: "Stargazer_Tree",
     eyebrow: "3D web experience",
     description:
       "An immersive 3D portfolio rendered in the browser: WebGL scenes, camera choreography and real-time lighting built with Three.js.",
     tech: ["Three.js", "WebGL", "GLSL", "JavaScript"],
     liveUrl: "https://threejs.plattnericus.dev",
-    githubUrl: "https://github.com/Plattnericus/ThreeJS_Portfolio",
+    githubUrl: "https://github.com/Plattnericus/Stargazer_Tree",
     preview: {
       kind: "video",
       src: "/projects/threejs_portfolio.mp4",
@@ -97,7 +97,7 @@ export const projects: Project[] = [
       "A wall-mounted smart display running on a Raspberry Pi: time, weather and daily information rendered as a calm always-on interface.",
     tech: ["JavaScript", "Node.js", "Raspberry Pi", "Selfhosting"],
     liveUrl: "https://magicmirror.plattnericus.dev",
-    githubUrl: "https://github.com/Plattnericus/Magic-Mirror",
+    githubUrl: "https://github.com/bedchem/Magic-Mirror",
     preview: {
       kind: "video",
       src: "/projects/magicmirror.mp4",
@@ -113,7 +113,7 @@ export const projects: Project[] = [
       "The classic logic game rebuilt from scratch: clean grid state, flood reveals, flagging and a focused minimal interface.",
     tech: ["Game Logic", "Grid Algorithms", "UI"],
     liveUrl: "https://minesweeper.plattnericus.dev",
-    githubUrl: "https://github.com/Plattnericus/Minesweeper",
+    githubUrl: "https://github.com/bedchem/Minesweeper",
     preview: {
       kind: "video",
       src: "/projects/minesweeper.mp4",
@@ -129,7 +129,7 @@ export const projects: Project[] = [
       "A game mod that renders the predicted flight path of projectiles in real time, directly inside the game world.",
     tech: ["Java", "Modding", "Physics"],
     liveUrl: "https://modrinth.com/mod/projectile.preview",
-    githubUrl: "https://github.com/Plattnericus",
+    githubUrl: "https://github.com/Ryhox/ProjectilePreview-Mod",
     preview: {
       /* both in-game takes in one seamless loop, crossfading between them */
       kind: "video",

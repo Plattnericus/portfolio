@@ -487,7 +487,6 @@ main {
 }
 
 .why-title {
-  position: relative;
   font-family: var(--font-head);
   font-weight: 400;
   text-transform: uppercase;
@@ -495,24 +494,6 @@ main {
   line-height: 0.9;
   color: var(--light);
   padding-left: clamp(1rem, 2vw, 2rem);
-}
-
-/* the title's rule: a quiet track that the terracotta fills as you read
-   through the beats (Why.tsx) — full from the start without JS */
-.why-rail {
-  position: absolute;
-  left: 0;
-  top: -0.3em;
-  bottom: -0.6em;
-  width: 4px;
-  background: rgba(217, 119, 87, 0.22);
-}
-
-.why-rail-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--accent);
-  transform-origin: center top;
 }
 
 /* one line of a heading that slides up out of its own mask */
@@ -528,42 +509,6 @@ main {
   display: block;
 }
 
-.why-count {
-  display: none;
-  align-items: baseline;
-  gap: 0.35em;
-  margin-top: 2.4rem;
-  padding-left: clamp(1rem, 2vw, 2rem);
-  font-family: var(--font-head);
-  font-size: clamp(1.5rem, 2vw, 2.1rem);
-  line-height: 1;
-  color: var(--light);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
-  .why-count {
-    display: flex;
-  }
-}
-
-.why-count-mask {
-  display: inline-block;
-  overflow: hidden;
-  padding-block: 0.08em;
-  margin-block: -0.08em;
-}
-
-.why-current {
-  display: inline-block;
-  color: var(--accent);
-}
-
-.why-count-total {
-  font-size: 0.62em;
-  color: rgba(242, 237, 230, 0.4);
-}
-
 .why-intro {
   margin-top: 2rem;
   max-width: 26rem;
@@ -577,25 +522,6 @@ main {
   display: grid;
   gap: 44vh;
   padding: 16vh clamp(1.4rem, 7vw, 8rem) 28vh clamp(1rem, 3vw, 3rem);
-}
-
-.why-num {
-  display: flex;
-  align-items: center;
-  gap: 0.8em;
-  margin-bottom: 1.1rem;
-  color: rgba(242, 237, 230, 0.42);
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  font-variant-numeric: tabular-nums;
-}
-
-.why-num::after {
-  content: "";
-  width: 2.4rem;
-  height: 1px;
-  background: currentColor;
 }
 
 /* desktop: the beat being read has the floor, the others step back */
@@ -669,7 +595,9 @@ main {
   font-family: var(--font-head);
   font-weight: 400;
   text-transform: uppercase;
-  font-size: clamp(2.8rem, 6vw, 6rem);
+  /* bounded by the height too: on a short laptop screen the heading, a row
+     of cards and their buttons all have to fit the pin with room to spare */
+  font-size: clamp(2.8rem, min(6vw, 10.5vh), 6rem);
   line-height: 0.9;
   color: var(--light);
   padding-left: clamp(1rem, 2vw, 2rem);
@@ -698,18 +626,32 @@ main {
 
 .showcase-track {
   display: flex;
-  align-items: flex-start;
+  /* every card as tall as the tallest, so the button rows share one line
+     even where a card's tech line wraps and its neighbour's doesn't */
+  align-items: stretch;
   gap: clamp(1.6rem, 3.4vw, 3.4rem);
   padding-left: clamp(1.4rem, 7vw, 8rem);
   will-change: transform;
   width: max-content;
 }
 
+/* A third of the screen, and never taller than the pin allows: what's left
+   of 76% of the height once the heading (two lines of .showcase-title) and
+   the card's name and buttons are taken off is the clip's height (4:3). */
 .showcase-card {
   position: relative;
   flex: 0 0 auto;
-  width: min(33.333vw, 640px);
+  width: min(33.333vw, 640px, calc((76vh - 1.8 * min(6vw, 10.5vh) - 6.5rem) * 4 / 3));
   text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  /* the URL chip and the buttons size themselves to the card */
+  container-type: inline-size;
+}
+
+/* the clip and its mouse-only link (ProjectCard.tsx) */
+.sc-visual {
+  position: relative;
   display: block;
 }
 
@@ -725,14 +667,36 @@ main {
 .sc-media {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sc-video,
+.sc-mirror {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
 
-.sc-video {
-  z-index: 0;
+/* once its frames are painted onto the canvas (ProjectPreview.tsx), the
+   video plays on unseen underneath */
+.sc-frame[data-mirrored] .sc-video {
+  opacity: 0;
+}
+
+/* "Source code" hover: the clip redrawn as glyphs (asciiScan.ts) */
+.sc-ascii {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 /* desktop pin: each clip sits a little larger than its frame so it has room
@@ -768,6 +732,12 @@ main {
   line-height: 1;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  transition: opacity 0.4s ease;
+}
+
+/* it says "Live" — not while the clip is showing its source */
+.sc-frame[data-mode="code"] .sc-live {
+  opacity: 0;
 }
 
 .sc-live-dot {
@@ -837,19 +807,17 @@ main {
   transition: transform 0.6s var(--ease-out-expo);
 }
 
-/* the corner arrow is for keyboards and for pointers without the custom
-   cursor — where the cursor shows its "Open" label, it would say it twice */
-html:not(.has-cursor) .showcase-card:hover .sc-arrow,
-.showcase-card:focus-within .sc-arrow {
+/* the corner arrow is for pointers without the custom cursor — where the
+   cursor shows its "Open" label over the clip, it would say it twice */
+html:not(.has-cursor) .sc-visual:hover .sc-arrow {
   opacity: 1;
 }
 
-html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
-.showcase-card:focus-within .sc-arrow svg {
+html:not(.has-cursor) .sc-visual:hover .sc-arrow svg {
   transform: scale(1);
 }
 
-/* stretched overlay link: keeps the whole card clickable + focusable */
+/* stretched over the clip: clicking the footage opens the live site too */
 .sc-link {
   position: absolute;
   inset: 0;
@@ -857,9 +825,102 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   border-radius: clamp(6px, 0.556vw, 10px);
 }
 
-.sc-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+/* Where a hovered button leads, typed out at the foot of the clip
+   (ProjectPreview.tsx). The chip grows one character at a time behind a
+   blinking caret — in a monospace face 1ch is exactly one character — and
+   its type shrinks on narrow cards so the longest address still fits. */
+.sc-url {
+  --inset: clamp(10px, 0.9vw, 16px);
+  position: absolute;
+  z-index: 3;
+  left: var(--inset);
+  bottom: var(--inset);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  max-width: calc(100% - 2 * var(--inset));
+  padding: 0.6em 0.9em 0.6em 0.75em;
+  border-radius: 999px;
+  background: rgba(11, 9, 8, 0.88);
+  box-shadow: inset 0 0 0 1px rgba(242, 237, 230, 0.14);
+  color: var(--light);
+  font-family: var(--font-mono);
+  font-size: min(0.8rem, calc((100cqi - 2.25rem) / (var(--n) * 0.6 + 4)));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.6s var(--ease-out-expo);
+}
+
+.sc-url-icon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--accent);
+}
+
+.sc-url--code .sc-url-icon {
+  fill: currentColor;
+}
+
+/* typed in on the way in; on the way out it keeps its text until the chip
+   has faded, then resets for next time */
+.sc-url-text {
+  display: block;
+  overflow: hidden;
+  width: 0;
+  transition: width 0s 0.3s;
+}
+
+.sc-url-host {
+  color: rgba(242, 237, 230, 0.5);
+}
+
+.sc-url-caret {
+  flex: none;
+  width: 1.5px;
+  height: 1.15em;
+  margin-left: calc(1px - 0.55em);
+  background: var(--accent);
+}
+
+.sc-frame[data-mode="live"] .sc-url--live,
+.sc-frame[data-mode="code"] .sc-url--code {
+  opacity: 1;
+  transform: none;
+}
+
+.sc-frame[data-mode="live"] .sc-url--live .sc-url-text,
+.sc-frame[data-mode="code"] .sc-url--code .sc-url-text {
+  width: calc(var(--n) * 1ch);
+  transition: width calc(var(--n) * 24ms) steps(var(--n), end) 0.25s;
+}
+
+.sc-frame[data-mode] .sc-url-caret {
+  animation: caret-blink 0.9s step-end infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-url,
+  .sc-url-text {
+    transition: none !important;
+  }
+
+  .sc-frame[data-mode] .sc-url-caret {
+    animation: none;
+  }
 }
 
 .sc-meta {
@@ -887,6 +948,66 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   color: rgba(242, 237, 230, 0.55);
   font-size: 0.95rem;
   margin-top: 0.15rem;
+}
+
+/* Live demo and Source code: two quiet outlined pills, only as wide as
+   their labels — the row of cards stays calm, and the terracotta only comes
+   in on hover (the ring, a faint wash, the label rolling in) */
+.sc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.sc-actions .pill {
+  flex: none;
+  gap: 0.6rem;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 1.05rem 0 0.9rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--light);
+  box-shadow: inset 0 0 0 1px rgba(242, 237, 230, 0.22);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  transition:
+    box-shadow 0.45s var(--ease-out-expo),
+    background-color 0.45s var(--ease-out-expo),
+    scale 0.2s ease;
+}
+
+.sc-actions .pill:hover,
+.sc-actions .pill:focus-visible {
+  background-color: rgba(217, 119, 87, 0.1);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  filter: none;
+}
+
+.sc-actions .pill-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--accent);
+}
+
+.sc-actions .pill-icon-track,
+.sc-actions .pill-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sc-actions .pill-label {
+  flex: none;
+  padding: 0;
+}
+
+.sc-actions .roll-row--next {
+  color: var(--accent);
 }
 
 /* Endcap: "want to see more?" over a GitHub mark (with Clawd sitting on it)
@@ -1995,13 +2116,27 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
     margin-bottom: 8.5333vw;
   }
 
+  /* on a phone held sideways the clip, the name and the buttons still fit
+     one screen: the card narrows with the height */
   .showcase-card {
-    width: min(84vw, 32rem);
+    width: min(84vw, 32rem, calc((100svh - 10rem) * 4 / 3));
   }
 
   .sc-frame,
   .sc-link {
     border-radius: 2.1333vw;
+  }
+
+  /* phones: a full-width pair, each half an easy thumb target */
+  .sc-actions {
+    padding-top: 0;
+  }
+
+  .sc-actions .pill {
+    flex: 1 1 0;
+    min-width: fit-content;
+    justify-content: center;
+    min-height: 44px;
   }
 
   .sc-arrow {
@@ -2011,7 +2146,7 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   }
 
   .sc-meta {
-    padding: 4.2667vw 0;
+    padding: min(4.2667vw, 1rem) 0;
   }
 
   .showcase-endcap {
