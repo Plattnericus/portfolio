@@ -1,5 +1,5 @@
 import { gsap } from "@/lib/animation";
-import { FEET, HEAD, currentSquash, give, inFlight, jump, type Jump, type Pose } from "./motion";
+import { BODY_X, FEET, HEAD, currentSquash, give, inFlight, jump, type Jump, type Pose } from "./motion";
 
 /** Highest the arc may rise above the higher end of a flight. */
 const HOP = 42;
@@ -73,7 +73,7 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
     const left = root.offsetLeft + img.offsetLeft;
     const top = root.offsetTop + img.offsetTop;
     const size = img.offsetWidth;
-    root.style.transformOrigin = `${img.offsetLeft + size / 2}px ${img.offsetTop + size * FEET}px`;
+    root.style.transformOrigin = `${img.offsetLeft + size * BODY_X}px ${img.offsetTop + size * FEET}px`;
     return { left, top, size };
   };
 
@@ -82,11 +82,11 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
   let settleX = 0;
 
   /** The pose that puts him on the mark: feet on its sprite's feet line,
-      centred, at its size. */
+      body over its body, at its size. */
   const perchPose = (box: { left: number; top: number; size: number }): Pose => {
     const rect = perch.getBoundingClientRect();
     return {
-      x: rect.left + settleX + rect.width / 2 - (box.left + box.size / 2),
+      x: rect.left + settleX + rect.width * BODY_X - (box.left + box.size * BODY_X),
       y: rect.top + rect.width * FEET - (box.top + box.size * FEET),
       scale: rect.width / box.size,
     };

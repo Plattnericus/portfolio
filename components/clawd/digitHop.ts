@@ -7,7 +7,8 @@ import { HEAD, give, jump, type Jump, type Pose } from "./motion";
     its middle (the CSS puts him there to begin with). */
 const SPOTS: Record<string, { across: number; top: number }> = {
   "4": { across: 0.66, top: 0.055 },
-  "0": { across: 0.5, top: 0.0475 },
+  /* the 0 is pointed: his inner feet stand just either side of the tip */
+  "0": { across: 0.5, top: 0.052 },
 };
 /** How far (em) a digit gives under him when he lands on it. */
 const GIVE = 0.016;

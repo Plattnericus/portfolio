@@ -1,12 +1,15 @@
 import { gsap } from "@/lib/animation";
 
-/** Clawd's ground line, as a share of his sprite's height: the bottom of the
-    shadow under him (156 of 192 px in every clip — he hovers a little above
-    it, as the pixel art has him). He is scaled and squashed around this
-    point, so his shadow stays on whatever he stands on. */
-export const FEET = 0.8125;
-/** Where his visible head starts in the sprite (48 of 192 px). */
-export const HEAD = 0.25;
+/** Clawd's ground line, as a share of his sprite's height: the soles of his
+    feet at the low point of his idle bob (131 of 192 px). He is scaled and
+    squashed around it, so his feet stay on whatever he stands on. */
+export const FEET = 131 / 192;
+/** The middle of his body across the sprite (78 of 192 px) — he stands left
+    of centre, leaving the right of the frame to his props (a laptop, a
+    terminal, a warning sign). Everything he lands on is lined up with it. */
+export const BODY_X = 78 / 192;
+/** Where his head starts in the sprite (60 of 192 px). */
+export const HEAD = 60 / 192;
 
 /** How far (deg) he leans into a jump at full speed. */
 const LEAN = 8;

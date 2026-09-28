@@ -154,7 +154,7 @@ hold their frame until it's their turn.
 | First load | 249 KB of gzipped JS; the 3D bundle (Three.js + R3F) loads after it, off the critical path |
 | Project clips | 3.4 MB for all seven, H.264 at 912×684, fetched only after the intro and within two screens of view, one playing at a time |
 | 3D | a single 84 KB arm model, loaded through three's own `GLTFLoader` — no decoders shipped for compression it doesn't use |
-| Mascot | 49 KB for all 22 clips, warmed up at low priority once the page is idle, desktop only |
+| Mascot | 48 KB for all 22 clips, warmed up at low priority once the page is idle, desktop only |
 | Caching | clips, model, posters and fonts cached for a week with stale-while-revalidate |
 
 **Built for machines as well as people.** JSON-LD for the person, site and every
@@ -231,9 +231,11 @@ lib/
 - **Clawd's clips** (`public/models/mascot/webp/`) are pixel art on a 96px grid,
   stored at exactly 2x as lossless animated WebP — frame for frame identical to
   the source GIFs at a fraction of their size — and drawn with
-  `image-rendering: pixelated`. His ground line (the bottom of his shadow) is
-  81.25% down the sprite; everything he lands on is aligned to it. Bump
-  `ASSET_VERSION` in `lib/clawd.ts` whenever they are regenerated.
+  `image-rendering: pixelated`. His feet are 68.2% down the sprite and his body
+  sits 40.6% across it, leaving the right of the frame to his props; everything
+  he lands on is lined up with those two (`FEET` and `BODY_X` in
+  `components/clawd/motion.ts`). Bump `ASSET_VERSION` in `lib/clawd.ts` whenever
+  they are regenerated.
 - **The NEXOR face** is an inlined subset of UnifrakturCook (only N E X O R, the
   digits and the space). A new letter in the wordmark means regenerating it from
   `public/fonts/UnifrakturCook/` — see the comment in `globals.css`.

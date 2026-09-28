@@ -1016,15 +1016,14 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   transform: none;
 }
 
-/* Clawd's ground line (the bottom of the shadow under him) is 81.25% down
-   his sprite; the disc starts a hair above it, so the shadow rests on the
-   top of the mark */
+/* Clawd's feet are 68.2% down his sprite; the disc starts just above that,
+   so his feet stand a hair into the curve of the mark */
 .endcap-mark {
   position: relative;
   flex: 0 0 auto;
   display: block;
   width: var(--mark);
-  padding-top: calc(var(--clawd) * 0.8);
+  padding-top: calc(var(--clawd) * 0.652);
   color: var(--light);
   text-decoration: none;
 }
@@ -1055,10 +1054,11 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   top: 0;
   left: 50%;
   width: var(--clawd);
-  margin-left: calc(var(--clawd) / -2);
+  /* his body, not his sprite box, is centred: it sits 40.6% across */
+  margin-left: calc(var(--clawd) * -0.40625);
   line-height: 0;
   pointer-events: none;
-  transform-origin: 50% 81.25%;
+  transform-origin: 40.625% 68.23%;
 }
 
 .endcap-clawd-spin,
@@ -1067,11 +1067,11 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 }
 
 .endcap-clawd-spin {
-  transform-origin: 50% 51%;
+  transform-origin: 40.625% 50.5%;
 }
 
 .endcap-clawd-squash {
-  transform-origin: 50% 81.25%;
+  transform-origin: 40.625% 68.23%;
 }
 
 .endcap-clawd img {
@@ -1654,8 +1654,8 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 
 .clawd-sprite {
   pointer-events: auto;
-  /* the lean of a flight turns about his middle (perchJump.ts) */
-  transform-origin: 50% 51%;
+  /* the lean of a flight turns about the middle of his body (motion.ts) */
+  transform-origin: 40.625% 50.5%;
   border: 0;
   padding: 0;
   background: transparent;
@@ -1694,11 +1694,11 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 
 /* pixel art on a 96px grid: 96px is one CSS px per art pixel, and
    nearest-neighbour keeps every edge crisp at any other size (a flight, the
-   mark). He squashes about his ground line, the bottom of his shadow. */
+   mark). He squashes about his feet, under the middle of his body. */
 .clawd-sprite img {
   width: 96px;
   height: 96px;
-  transform-origin: 50% 81.25%;
+  transform-origin: 40.625% 68.23%;
   object-fit: contain;
   image-rendering: pixelated;
 }
@@ -2293,18 +2293,18 @@ html.has-cursor [data-cursor] * {
   }
 }
 
-/* Clawd starts on top of the 0: its ink starts 0.0475em below the digit's
-   box (measured from the glyph), and his ground line — the bottom of his
-   shadow — is 81.25% down his sprite; it sinks a hair into the glyph.
+/* Clawd starts on the tip of the 0: its ink is 0.052em below the digit's
+   box where his inner feet stand (measured from the glyph), his feet are
+   68.2% down his sprite and his body 40.6% across it.
    Only the sprite takes the pointer — the button stays behind on the 0
    while he hops about. */
 .nf-clawd {
   position: absolute;
   z-index: 1;
   left: 50%;
-  top: calc(var(--nf) * 0.0475 - var(--nf-clawd) * 0.8);
+  top: calc(var(--nf) * 0.052 - var(--nf-clawd) * 0.6823);
   width: var(--nf-clawd);
-  margin-left: calc(var(--nf-clawd) / -2);
+  margin-left: calc(var(--nf-clawd) * -0.40625);
   padding: 0;
   border: 0;
   background: none;
@@ -2318,15 +2318,15 @@ html.has-cursor [data-cursor] * {
   display: block;
 }
 
-/* the lean of a hop turns about his middle */
+/* the lean of a hop turns about the middle of his body */
 .nf-clawd-lean {
-  transform-origin: 50% 51%;
+  transform-origin: 40.625% 50.5%;
 }
 
 .nf-clawd img {
   width: 100%;
   height: auto;
-  transform-origin: 50% 81.25%;
+  transform-origin: 40.625% 68.23%;
   image-rendering: pixelated;
   pointer-events: auto;
   cursor: pointer;
@@ -2341,8 +2341,8 @@ html.has-cursor [data-cursor] * {
 /* over his head, and it hops along with him */
 .nf-bubble {
   position: absolute;
-  left: 50%;
-  bottom: 80%;
+  left: 40.625%;
+  bottom: 74%;
   translate: -50% 0;
   padding: 0.35rem 0.75rem;
   border-radius: 999px;

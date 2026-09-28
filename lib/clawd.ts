@@ -32,7 +32,7 @@ export type ClawdClip =
    public/models/mascot/webp/ are regenerated: same filenames, new pixel
    content, and browsers otherwise keep serving whatever they cached from an
    earlier version. */
-const ASSET_VERSION = "6";
+const ASSET_VERSION = "7";
 
 function clip(file: string) {
   return `/models/mascot/webp/${file}?v=${ASSET_VERSION}`;
