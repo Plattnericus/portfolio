@@ -29,7 +29,11 @@ const frame = ({ x, y }: Pose): Keyframe => ({
  * poked. Every hop is one baked jump (motion.ts) — steady sideways, gravity
  * up and down — with the digit he lands on giving under him.
  */
-export function createDigitHopper(code: HTMLElement) {
+export function createDigitHopper(
+  code: HTMLElement,
+  /** he leaves the digit he was on — whatever he was saying there ends */
+  onDepart?: () => void,
+) {
   const clawd = code.querySelector<HTMLElement>(".nf-clawd");
   const body = clawd?.querySelector<HTMLElement>(".nf-clawd-body");
   const lean = clawd?.querySelector<HTMLElement>(".nf-clawd-lean");
@@ -45,8 +49,16 @@ export function createDigitHopper(code: HTMLElement) {
   let squish: Animation | null = null;
   let held: Animation | null = null;
   let pending: number | null = null;
+  /* the pause before his next hop on his own */
   let timer = 0;
+  /* his entrance — kept apart from `timer`, which every hop clears: a
+     pointer resting on a digit while the page loads calls him over before
+     he has appeared, and must not cancel the appearance itself */
+  let enterTimer = 0;
+  let entered = false;
   let stopped = false;
+  /* after a poke he stays put while he talks */
+  let quietUntil = 0;
 
   const fontSize = () => parseFloat(getComputedStyle(code).fontSize);
 
@@ -114,7 +126,8 @@ export function createDigitHopper(code: HTMLElement) {
     }, ms);
   };
 
-  const idle = () => schedule(gsap.utils.random(PAUSE[0], PAUSE[1]));
+  const idle = () =>
+    schedule(Math.max(gsap.utils.random(PAUSE[0], PAUSE[1]), quietUntil - performance.now()));
 
   /** One hop from where he sits onto digit `to` (the same digit: a hop on
       the spot). */
@@ -144,6 +157,7 @@ export function createDigitHopper(code: HTMLElement) {
 
     held?.cancel();
     held = null;
+    if (to !== at) onDepart?.();
     const current = jump(parts, {
       from,
       to: target,
@@ -182,7 +196,9 @@ export function createDigitHopper(code: HTMLElement) {
   const enter = (delay: number) => {
     place();
     clawd.style.opacity = "0";
-    timer = window.setTimeout(() => {
+    window.clearTimeout(enterTimer);
+    enterTimer = window.setTimeout(() => {
+      entered = true;
       clawd.style.removeProperty("opacity");
       clawd.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
       const target = pose(at);
@@ -194,14 +210,17 @@ export function createDigitHopper(code: HTMLElement) {
     }, delay);
   };
 
-  /** Called over to digit `i` (the pointer is on it). */
+  /** Called over to digit `i` (the pointer is on it). Before he has
+      appeared, he heads there as soon as he has landed. */
   const call = (i: number) => {
-    if (i !== at || hop) go(i);
+    if (!entered) pending = i;
+    else if (i !== at || hop) go(i);
   };
 
-  /** A hop on the spot, for a poke. */
-  const poke = () => {
-    if (!hop) go(at, { rise: clawd.offsetWidth * 0.3, duration: 360 });
+  /** A hop on the spot, for a poke — then he stays put for `talk` ms. */
+  const poke = (talk = 0) => {
+    quietUntil = performance.now() + talk;
+    if (entered && !hop) go(at, { rise: clawd.offsetWidth * 0.3, duration: 360 });
   };
 
   const resize = () => {
@@ -215,6 +234,7 @@ export function createDigitHopper(code: HTMLElement) {
   const stop = () => {
     stopped = true;
     window.clearTimeout(timer);
+    window.clearTimeout(enterTimer);
   };
 
   const destroy = () => {

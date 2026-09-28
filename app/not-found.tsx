@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { createDigitHopper } from "@/components/clawd/digitHop";
 import CursorGlow from "@/components/motion/CursorGlow";
@@ -25,6 +25,9 @@ const TILT = 6;
 
 /** When Clawd drops onto the 0, into the intro below (ms). */
 const CLAWD_ENTERS = 1050;
+
+/** How long a line stays up (ms). */
+const TALK = 2200;
 
 export default function NotFound() {
   const rootRef = useRef<HTMLElement | null>(null);
@@ -65,7 +68,7 @@ export default function NotFound() {
         /* then Clawd drops onto the 0 and starts hopping from digit to digit
            — over to the one under the pointer, too */
         const code = rootRef.current?.querySelector<HTMLElement>(".nf-code");
-        const hop = code ? createDigitHopper(code) : null;
+        const hop = code ? createDigitHopper(code, () => setLine(null)) : null;
         hopper.current = hop;
         if (!code || !hop) return;
         hop.enter(CLAWD_ENTERS);
@@ -119,9 +122,28 @@ export default function NotFound() {
     lineIndex.current += 1;
     setLine(next);
     window.clearTimeout(lineTimer.current);
-    lineTimer.current = window.setTimeout(() => setLine(null), 2200);
-    hopper.current?.poke();
+    lineTimer.current = window.setTimeout(() => setLine(null), TALK);
+    hopper.current?.poke(TALK);
   };
+
+  /* the bubble never leaves the screen: near an edge it slides back on, its
+     tail staying on him */
+  useLayoutEffect(() => {
+    const bubble = rootRef.current?.querySelector<HTMLElement>(".nf-bubble");
+    if (!bubble) return;
+    bubble.style.removeProperty("--bubble-shift");
+    /* its width as laid out: it is still scaled down in its pop-in, about
+       its own centre line */
+    const rect = bubble.getBoundingClientRect();
+    const half = bubble.offsetWidth / 2;
+    const middle = rect.left + rect.width / 2;
+    const edge = 8;
+    const limit = Math.max(0, half - 18);
+    const over = middle + half - (window.innerWidth - edge);
+    const under = edge - (middle - half);
+    const shift = gsap.utils.clamp(-limit, limit, over > 0 ? -over : under > 0 ? under : 0);
+    if (shift) bubble.style.setProperty("--bubble-shift", `${shift.toFixed(2)}px`);
+  }, [line]);
 
   /* Home through the stars: the field jumps to warp, the 404 falls away into
      it and a curtain rises from below — orange on desktop, where the NEXOR

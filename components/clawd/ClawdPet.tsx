@@ -38,6 +38,11 @@ type PetState = {
   bubble?: string;
 };
 
+/** His sprite's size on screen (px) — the bubble is placed off it. */
+const SPRITE = 96;
+
+type BubblePlace = "above" | "left" | "right" | "below";
+
 const IDLE_STATE: PetState = { clip: "IDLE", kind: "idle", until: Infinity };
 /* in the air he is his calm idle self; on the mark he opens his laptop */
 const FLY_STATE: PetState = { clip: "IDLE", kind: "perch", until: Infinity };
@@ -351,27 +356,86 @@ export default function ClawdPet() {
      — the same pattern the rest of this codebase uses for React-driven GSAP
      timelines (see Hero.tsx), and it's StrictMode-safe by construction. */
   const bubbleRef = useRef<HTMLSpanElement | null>(null);
+
+  /** Puts the bubble where it fits whole on screen, tail on him: over his
+      head, else beside his face, else under his feet — and slides it back
+      from an edge while the tail stays put. His rect is scaled while he sits
+      on the GitHub mark, and the bubble is scaled with him. */
+  const placeBubble = useRef(() => {
+    const el = bubbleRef.current;
+    const box = rootRef.current?.getBoundingClientRect();
+    if (!el || !box) return "above" as BubblePlace;
+    const scale = box.width / SPRITE;
+    const width = el.offsetWidth * scale;
+    const height = el.offsetHeight * scale;
+    const gap = 14 * scale;
+    const edge = 8;
+    const right = window.innerWidth - edge;
+    const bottom = window.innerHeight - edge;
+    const head = box.top + box.width * 0.3125;
+    const face = box.top + box.width * 0.4;
+    const feet = box.top + box.width * 0.6823;
+    const armsLeft = box.left + box.width * 0.156;
+    /* his props (laptop, lock, terminal) fill the right of the frame */
+    const props = box.right;
+    const body = box.left + box.width * 0.40625;
+    const besideFits = face - height / 2 >= edge && face + height / 2 <= bottom;
+    const fits: Array<[BubblePlace, boolean]> = [
+      ["above", head - gap - height >= edge],
+      ["left", besideFits && armsLeft - gap - width >= edge],
+      ["right", besideFits && props + 8 * scale + width <= right],
+      ["below", feet + gap + height <= bottom],
+    ];
+    const place = fits.find(([, ok]) => ok)?.[0] ?? "above";
+    let shift = 0;
+    if (place === "above" || place === "below") {
+      /* as far as the tail can go and still leave the bubble's round end
+         clear of it */
+      const limit = Math.max(0, width / 2 - 18 * scale);
+      const overRight = body + width / 2 - right;
+      const overLeft = edge - (body - width / 2);
+      shift = gsap.utils.clamp(-limit, limit, overRight > 0 ? -overRight : overLeft > 0 ? overLeft : 0);
+    }
+    el.dataset.place = place;
+    el.style.setProperty("--bubble-shift", `${(shift / scale).toFixed(2)}px`);
+    return place;
+  });
+
+  /* it follows him: re-placed while he is dragged and when the window
+     changes size */
+  useEffect(() => {
+    if (!state.bubble) return;
+    let raf = 0;
+    const replace = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => placeBubble.current());
+    };
+    window.addEventListener("resize", replace);
+    window.addEventListener("pointermove", replace, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", replace);
+      window.removeEventListener("pointermove", replace);
+    };
+  }, [state.bubble]);
+
   useGSAP(
     () => {
       const el = bubbleRef.current;
-      if (!el || !state.bubble) return;
+      const inner = el?.querySelector<HTMLElement>(".clawd-bubble-body");
+      if (!el || !inner || !state.bubble) return;
       const letters = el.querySelectorAll(".clawd-bubble-letter");
 
-      /* prefer above the sprite; flip below only when the viewport doesn't
-         leave room — Clawd's default spawn sits close to the top edge, so
-         that's the common case there, while a dragged-down Clawd gets the
-         bubble above like normal. */
-      const spriteTop = rootRef.current?.getBoundingClientRect().top ?? Infinity;
-      const below = spriteTop < el.offsetHeight + 16;
-      el.classList.toggle("clawd-bubble--below", below);
-      const enterY = below ? -10 : 10;
-      const exitY = below ? 8 : -8;
+      const place = placeBubble.current();
+      /* it grows out of him and leaves back the same way */
+      const away = { above: { y: 8 }, below: { y: -8 }, left: { x: 8 }, right: { x: -8 } }[place];
+      const exit = { above: { y: -6 }, below: { y: 6 }, left: { x: -6 }, right: { x: 6 } }[place];
 
       const tl = gsap.timeline();
       tl.fromTo(
-        el,
-        { y: enterY, autoAlpha: 0, scale: 0.9 },
-        { y: 0, autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2)" },
+        inner,
+        { x: 0, y: 0, ...away, autoAlpha: 0, scale: 0.85 },
+        { x: 0, y: 0, autoAlpha: 1, scale: 1, duration: 0.34, ease: "back.out(1.8)" },
       ).fromTo(
         letters,
         { autoAlpha: 0 },
@@ -380,10 +444,11 @@ export default function ClawdPet() {
       );
 
       const lead = Math.max(200, state.until - performance.now() - 320);
-      gsap.to(el, {
-        y: exitY,
+      gsap.to(inner, {
+        ...exit,
         autoAlpha: 0,
-        duration: 0.3,
+        scale: 0.92,
+        duration: 0.26,
         ease: "power2.in",
         delay: lead / 1000,
       });
@@ -476,12 +541,14 @@ export default function ClawdPet() {
         <img src={displaySrc} alt="" width={96} height={96} draggable={false} />
       </button>
       {state.bubble && (
-        <span className="clawd-bubble" ref={bubbleRef}>
-          {state.bubble.split("").map((char, index) => (
-            <span className="clawd-bubble-letter" key={index}>
-              {char === " " ? "\u00A0" : char}
-            </span>
-          ))}
+        <span className="clawd-bubble" ref={bubbleRef} data-place="above">
+          <span className="clawd-bubble-body">
+            {state.bubble.split("").map((char, index) => (
+              <span className="clawd-bubble-letter" key={index}>
+                {char === " " ? "\u00A0" : char}
+              </span>
+            ))}
+          </span>
         </span>
       )}
     </div>
