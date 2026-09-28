@@ -4,12 +4,12 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Code } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { createDigitHopper } from "@/components/clawd/digitHop";
 import CursorGlow from "@/components/motion/CursorGlow";
 import PillInner from "@/components/ui/PillInner";
 import { EASE, NO_MOTION_PREF, gsap, useGSAP } from "@/lib/animation";
 import { CLAWD_SPRITES } from "@/lib/clawd";
-import { siteConfig } from "@/lib/site";
 
 /* WebGL-only and purely decorative — kept out of the server render and out of
    the initial bundle, exactly like the homepage canvas. */
@@ -21,28 +21,24 @@ const DIGITS = ["4", "0", "4"] as const;
 const LINES = ["Still 404.", "Retrying…", "Nope. Gone.", "Try the homepage?"];
 
 /** Most the 404 tilts toward the pointer (deg). */
-const TILT = 7;
+const TILT = 6;
+
+/** When Clawd drops onto the 0, into the intro below (ms). */
+const CLAWD_ENTERS = 1050;
 
 export default function NotFound() {
   const rootRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
-  /* Read after mount: the 404 HTML is prerendered once for every unknown URL,
-     so the path is only known in the browser (and must not cause a hydration
-     mismatch). */
-  const [path, setPath] = useState("");
   const [line, setLine] = useState<string | null>(null);
   const lineIndex = useRef(0);
   const lineTimer = useRef(0);
   const leaving = useRef(false);
+  const hopper = useRef<ReturnType<typeof createDigitHopper>>(null);
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setPath(window.location.pathname));
     /* the way home is the one click that matters here — have it ready */
     router.prefetch("/");
-    return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(lineTimer.current);
-    };
+    return () => window.clearTimeout(lineTimer.current);
   }, [router]);
 
   useGSAP(
@@ -50,8 +46,7 @@ export default function NotFound() {
       const mm = gsap.matchMedia();
       mm.add(NO_MOTION_PREF, () => {
         /* same move as the homepage hero: the glyphs pull up out of their
-           masks in alternating waves, then the rest of the column follows
-           and Clawd drops onto the 0 */
+           masks in alternating waves, then the rest of the column follows */
         gsap
           .timeline({ defaults: { ease: EASE.appleOut } })
           .fromTo(
@@ -62,22 +57,40 @@ export default function NotFound() {
           )
           .fromTo(
             ".nf-rise",
-            { y: 26, autoAlpha: 0 },
-            { y: 0, autoAlpha: 1, duration: 0.8, stagger: 0.09 },
+            { y: 24, autoAlpha: 0 },
+            { y: 0, autoAlpha: 1, duration: 0.8, stagger: 0.1 },
             0.6,
-          )
-          .fromTo(
-            ".nf-clawd",
-            { y: -90, autoAlpha: 0 },
-            { y: 0, autoAlpha: 1, duration: 0.5, ease: "power2.in" },
-            1.05,
-          )
-          .fromTo(
-            ".nf-clawd img",
-            { scaleX: 1.12, scaleY: 0.88 },
-            { scaleX: 1, scaleY: 1, duration: 0.5, ease: "back.out(2)" },
-            1.55,
           );
+
+        /* then Clawd drops onto the 0 and starts hopping from digit to digit
+           — over to the one under the pointer, too */
+        const code = rootRef.current?.querySelector<HTMLElement>(".nf-code");
+        const hop = code ? createDigitHopper(code) : null;
+        hopper.current = hop;
+        if (!code || !hop) return;
+        hop.enter(CLAWD_ENTERS);
+        const masks = [...code.querySelectorAll<HTMLElement>(".nf-mask")];
+        const fine = window.matchMedia("(pointer: fine)");
+        const calls = masks.map((mask, index) => {
+          const call = (event: PointerEvent) => {
+            if (event.type === "pointerenter" && !fine.matches) return;
+            hop.call(index);
+          };
+          mask.addEventListener("pointerenter", call);
+          mask.addEventListener("pointerdown", call);
+          return () => {
+            mask.removeEventListener("pointerenter", call);
+            mask.removeEventListener("pointerdown", call);
+          };
+        });
+        const onResize = () => hop.resize();
+        window.addEventListener("resize", onResize);
+        return () => {
+          calls.forEach((off) => off());
+          window.removeEventListener("resize", onResize);
+          hop.destroy();
+          hopper.current = null;
+        };
       });
 
       /* desktop pointers: the 404 leans toward the cursor like a card */
@@ -101,52 +114,13 @@ export default function NotFound() {
     { scope: rootRef },
   );
 
-  /* the requested path types itself into the trace, like a request going out */
-  useGSAP(
-    () => {
-      const target = rootRef.current?.querySelector<HTMLElement>(".nf-trace-path");
-      if (!target || !path) return;
-      const mm = gsap.matchMedia();
-      mm.add(NO_MOTION_PREF, () => {
-        const proxy = { n: 0 };
-        target.textContent = "";
-        gsap.to(proxy, {
-          n: path.length,
-          duration: Math.min(0.9, 0.2 + path.length * 0.04),
-          delay: 1.2,
-          ease: "none",
-          snap: { n: 1 },
-          onUpdate: () => {
-            target.textContent = path.slice(0, proxy.n);
-          },
-        });
-        gsap.fromTo(
-          ".nf-trace-status",
-          { autoAlpha: 0 },
-          { autoAlpha: 1, duration: 0.3, delay: 1.3 + Math.min(0.9, 0.2 + path.length * 0.04) },
-        );
-        return () => {
-          target.textContent = path;
-        };
-      });
-      return () => mm.revert();
-    },
-    { scope: rootRef, dependencies: [path] },
-  );
-
   const pokeClawd = () => {
     const next = LINES[lineIndex.current % LINES.length];
     lineIndex.current += 1;
     setLine(next);
     window.clearTimeout(lineTimer.current);
     lineTimer.current = window.setTimeout(() => setLine(null), 2200);
-    const img = rootRef.current?.querySelector(".nf-clawd img");
-    if (img && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      gsap
-        .timeline()
-        .to(img, { y: "-18%", duration: 0.18, ease: "power2.out" })
-        .to(img, { y: 0, duration: 0.3, ease: "bounce.out" });
-    }
+    hopper.current?.poke();
   };
 
   /* Home through the stars: the field jumps to warp, the 404 falls away into
@@ -158,6 +132,7 @@ export default function NotFound() {
     event.preventDefault();
     if (leaving.current) return;
     leaving.current = true;
+    hopper.current?.stop();
     window.dispatchEvent(new Event("nf-warp"));
     const root = rootRef.current;
     const desktop = window.matchMedia("(min-width: 900px)").matches;
@@ -197,8 +172,6 @@ export default function NotFound() {
       <CursorGlow />
 
       <div className="nf-content">
-        <p className="nf-eyebrow nf-rise">Error 404 · plattnericus.dev</p>
-
         <h1 className="nf-code" aria-label="404 — page not found">
           {DIGITS.map((digit, index) => (
             <span className="nf-mask" key={index} aria-hidden="true">
@@ -208,43 +181,35 @@ export default function NotFound() {
             </span>
           ))}
 
-          {/* Clawd keeps retrying the missing page, sitting on the 0 */}
+          {/* Clawd hops from digit to digit, still retrying the missing page */}
           <button
             type="button"
             className="nf-clawd"
             onClick={pokeClawd}
             aria-label="Clawd, the site mascot — click him"
           >
-            {line && (
-              <span className="nf-bubble" role="status">
-                {line}
+            <span className="nf-clawd-body">
+              {line && (
+                <span className="nf-bubble" role="status">
+                  {line}
+                </span>
+              )}
+              <span className="nf-clawd-lean">
+                {/* plain <img>: animated sprite */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={CLAWD_SPRITES.ERROR_RETRY} alt="" width={192} height={192} draggable={false} />
               </span>
-            )}
-            {/* plain <img>: animated sprite */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={CLAWD_SPRITES.ERROR_RETRY} alt="" width={192} height={192} draggable={false} />
+            </span>
           </button>
         </h1>
 
         <p className="nf-title nf-rise">Lost in the stack</p>
-        <p className="nf-copy nf-rise">
-          This route was never deployed — or it moved on. Everything that does exist is one
-          click away.
-        </p>
-
-        <p className="nf-trace nf-rise" aria-hidden="true">
-          <span className="nf-trace-method">GET</span>
-          <span className="nf-trace-path">{path || "/"}</span>
-          <span className="nf-trace-status">404 not found</span>
-        </p>
+        <p className="nf-copy nf-rise">This page doesn&apos;t exist — or it moved on.</p>
 
         <div className="nf-actions nf-rise">
           <Link className="pill" href="/" onClick={warpHome}>
             <PillInner icon={ArrowLeft} label="Back to Nexor" roll="left" />
           </Link>
-          <a className="pill" href={siteConfig.github} target="_blank" rel="noreferrer">
-            <PillInner icon={Code} label="GitHub" />
-          </a>
         </div>
       </div>
 

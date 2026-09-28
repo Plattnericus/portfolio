@@ -15,6 +15,22 @@ const RETRY_BACKOFF_MS = 900;
     without a phone pulling every video the moment the page opens. */
 const LOAD_AHEAD = "200% 0px 200% 0px";
 
+/** Two or more videos playing at once make Chrome treat the page like a video
+    call and run the whole display at the videos' own 30 Hz — every scroll
+    animation and Clawd's flights with it (measured on a 120 Hz Mac: 121 fps
+    with one clip, 31 with two). So only one clip plays at a time: the one
+    under the middle of the screen, or the last one that was. */
+let focusedClip: ((focused: boolean) => void) | null = null;
+function focusClip(set: (focused: boolean) => void) {
+  if (focusedClip === set) return;
+  focusedClip?.(false);
+  focusedClip = set;
+  set(true);
+}
+
+/** The middle of the screen, as an IntersectionObserver root margin. */
+const MIDDLE = "-49.5% -49.5% -49.5% -49.5%";
+
 /** A failed media request is usually a blip — a dropped connection, a proxy
     hiccup, an extension racing the request. Re-requesting the identical URL
     can simply be answered from the browser's cached failure, so every retry
@@ -43,6 +59,7 @@ export default function ProjectPreview({
   const { introDone } = useSmoothScroll();
   const [near, setNear] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [videoAttempt, setVideoAttempt] = useState(0);
   const retryTimer = useRef(0);
 
@@ -70,6 +87,7 @@ export default function ProjectPreview({
       const raf = requestAnimationFrame(() => {
         setNear(true);
         setIsActive(true);
+        focusClip(setFocused);
       });
       return () => cancelAnimationFrame(raf);
     }
@@ -88,12 +106,22 @@ export default function ProjectPreview({
       (entries) => setIsActive(entries.some((entry) => entry.isIntersecting)),
       { threshold: 0.08 },
     );
+    /* the card passing under the middle of the screen takes over playback */
+    const middleObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) focusClip(setFocused);
+      },
+      { rootMargin: MIDDLE },
+    );
     nearObserver.observe(root);
     activityObserver.observe(root);
+    middleObserver.observe(root);
 
     return () => {
       nearObserver.disconnect();
       activityObserver.disconnect();
+      middleObserver.disconnect();
+      if (focusedClip === setFocused) focusedClip = null;
     };
   }, []);
 
@@ -101,7 +129,7 @@ export default function ProjectPreview({
     const video = videoRef.current;
     if (!video || !shouldLoad) return;
 
-    if (!isActive) {
+    if (!isActive || !focused) {
       video.pause();
       return;
     }
@@ -110,7 +138,7 @@ export default function ProjectPreview({
       /* A browser that blocks autoplay just leaves the card on its first
          decoded frame. */
     });
-  }, [isActive, shouldLoad, videoAttempt]);
+  }, [focused, isActive, shouldLoad, videoAttempt]);
 
   const objectPosition = preview.objectPosition ?? "center center";
 
@@ -121,8 +149,9 @@ export default function ProjectPreview({
       role="img"
       aria-label={`${name} — ${eyebrow} preview`}
     >
-      {/* no autoPlay: playback is driven by isActive above, so a clip that
-          finishes loading while its card is off-screen doesn't start playing */}
+      {/* no autoPlay: playback is driven by isActive and focused above, so a
+          clip that finishes loading off-screen doesn't start playing, and the
+          others hold their frame while one plays */}
       <video
         className="sc-media sc-video"
         ref={videoRef}

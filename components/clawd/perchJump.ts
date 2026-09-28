@@ -1,25 +1,15 @@
 import { gsap } from "@/lib/animation";
+import { FEET, HEAD, currentSquash, give, inFlight, jump, type Jump, type Pose } from "./motion";
 
-/** Where Clawd's feet are, as a share of his sprite's height (the legs end at
-    146 of 192 px in every clip). He is scaled around this point, so a flight
-    between two sizes keeps his feet exactly on the line he stands on. */
-const FEET = 0.76;
-/** Where his visible head starts in the sprite (49 of 192 px). */
-const HEAD = 0.25;
 /** Highest the arc may rise above the higher end of a flight. */
 const HOP = 42;
 /** Closest his head may come to the top edge of the screen mid-air. */
 const TOP_MARGIN = 14;
-/** How far (deg) he leans into the direction he is gliding. */
-const LEAN = 7;
 /** Crouch before take-off (ms). */
-const CROUCH = 150;
-/** Keyframes per curve: enough that the piecewise-linear path between them
-    is indistinguishable from the real curve at any refresh rate. */
-const SAMPLES = 60;
+const CROUCH = 130;
+/** How far (px) the mark gives under him when he lands on it. */
+const MARK_GIVE = 5;
 
-/** Where he stands and how big he is, relative to his home in the corner. */
-type Pose = { x: number; y: number; scale: number };
 const HOME: Pose = { x: 0, y: 0, scale: 1 };
 
 export type PerchPhase = "fly" | "sit" | "home";
@@ -29,44 +19,6 @@ export type PerchPhase = "fly" | "sit" | "home";
 const flightTime = (from: Pose, to: Pose) =>
   1000 * gsap.utils.clamp(0.8, 1.2, 0.6 + Math.hypot(to.x - from.x, to.y - from.y) / 1600);
 
-/**
- * An arc from `from` to `to`: x moves in step with the flight while the
- * height follows a parabola over it. `k` is solved so the apex sits exactly
- * `rise` px above the higher of the two ends:
- * height(p) = h0·(1-p) + h1·p + 4k·p·(1-p) peaks at h0 + (a + 4k)² / 16k
- * (a = h1 - h0); setting that to max(h0, h1) + rise and taking the root that
- * keeps the apex inside the flight gives the k below.
- */
-function arc(from: Pose, to: Pose, rise: number) {
-  const h0 = -from.y;
-  const h1 = -to.y;
-  const a = h1 - h0;
-  const m = Math.max(h0, h1) + rise - h0;
-  const k = Math.max(0, (2 * m - a + 2 * Math.sqrt(Math.max(0, m * (m - a)))) / 4);
-  return (p: number): Pose => ({
-    x: from.x + (to.x - from.x) * p,
-    y: -(h0 * (1 - p) + h1 * p + 4 * k * p * (1 - p)),
-    scale: from.scale + (to.scale - from.scale) * p,
-  });
-}
-
-/** Keyframes for values going `from` → `to` under a GSAP ease — baked, so the
-    browser can play them on the compositor without running any script. */
-function eased(
-  ease: string,
-  from: number[],
-  to: number[],
-  toFrame: (values: number[]) => Keyframe,
-  samples = 24,
-): Keyframe[] {
-  const curve = gsap.parseEase(ease);
-  return Array.from({ length: samples + 1 }, (_, i) => {
-    const t = curve(i / samples);
-    return toFrame(from.map((value, j) => value + (to[j] - value) * t));
-  });
-}
-
-const squashFrame = ([sx, sy]: number[]): Keyframe => ({ transform: `scale(${sx}, ${sy})` });
 const poseFrame = ({ x, y, scale }: Pose): Keyframe => ({
   transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${scale.toFixed(4)})`,
 });
@@ -77,23 +29,29 @@ const poseFrame = ({ x, y, scale }: Pose): Keyframe => ({
  * page scrolls on past it, and back onto the mark when you scroll up to it.
  *
  * It moves the one real Clawd: there is no second copy to hand over to, so he
- * can never go missing or show up twice. The whole flight — crouch, arc, lean,
- * squash on landing, the mark dipping under him — is baked into keyframes and
- * played through the Web Animations API, so the browser runs it on the
- * compositor at the display's own refresh rate however busy the page is.
- * While he sits on the mark the finished flight simply holds its last frame;
- * the row is pinned there, so the mark doesn't move under him.
+ * can never go missing or show up twice. Every flight is baked up front by
+ * `jump()` (motion.ts), one animation per element, so the browser plays all
+ * of it — crouch, arc, lean, landing, the mark giving under him — on the
+ * compositor, however busy the scroll keeps the page. While he sits on the
+ * mark the finished flight holds its last frame; the row is pinned there, so
+ * the mark doesn't move under him.
  */
 export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
   /* the static copy on the mark is for phones and reduced motion, where there
      is no corner Clawd — here the real one flies over instead */
   perch.style.opacity = "0";
 
-  let flight: Animation | null = null;
-  let extras: Animation[] = [];
+  let flight: Jump | null = null;
+  /* the mark's give, and whatever of a flight still plays out after it was
+     let go (the squash of a landing at home) */
+  let loose: Animation[] = [];
+  /* his pose on the mark after an instant settle() */
+  let held: Animation | null = null;
   /* where he is headed (or sits): drives resize and ClawdPet readiness */
   let wantPerched = false;
   let phase: PerchPhase = "home";
+  /* where he rests when he isn't flying */
+  let rest: Pose = HOME;
 
   const setPhase = (next: PerchPhase) => {
     phase = next;
@@ -134,35 +92,28 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
     };
   };
 
-  /** Where he is right now — mid-flight included. */
-  const currentPose = (root: HTMLElement): Pose => {
-    const transform = getComputedStyle(root).transform;
-    if (!transform || transform === "none") return HOME;
-    const m = new DOMMatrixReadOnly(transform);
-    return { x: m.e, y: m.f, scale: m.a };
-  };
-
   const stop = () => {
-    flight?.cancel();
+    flight?.animations.forEach((animation) => animation.cancel());
     flight = null;
-    extras.forEach((animation) => animation.cancel());
-    extras = [];
-  };
-  const extra = (el: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions) => {
-    const animation = el.animate(keyframes, { easing: "linear", ...options });
-    extras.push(animation);
-    return animation;
+    loose.forEach((animation) => animation.cancel());
+    loose = [];
+    held?.cancel();
+    held = null;
   };
 
   /** One flight from wherever he is to `to`, ending in a landing. */
-  const fly = (to: () => Pose | null, onLanded: () => void) => {
+  const fly = (to: () => Pose | null, onLanded: () => void, crouch = true) => {
     const p = parts();
     if (!p) return;
     const box = homeBox(p.root, p.img);
-    const from = currentPose(p.root);
-    const inAir = phase === "fly";
+    /* cut short mid-air, the new flight picks up his position, speed and
+       squash exactly where the old one left them */
+    const now = inFlight(flight);
+    const from = now?.pose ?? rest;
+    const squash = now ? currentSquash(p.img) : undefined;
     stop();
     const target = to() ?? HOME;
+    const onMark = target !== HOME;
 
     /* the apex stays clear of the top edge: his head must not leave the
        screen anywhere along the arc (it rises above the higher end) */
@@ -170,45 +121,33 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
       box.top + box.size * FEET + Math.min(from.y, target.y) -
       box.size * (FEET - HEAD) * Math.max(from.scale, target.scale);
     const rise = gsap.utils.clamp(0, HOP, headTop - TOP_MARGIN);
-    const path = arc(from, target, inAir ? Math.min(rise, 12) : rise);
-    const ease = gsap.parseEase("sine.inOut");
-    const lean = (target.x < from.x ? -1 : 1) * LEAN;
-    const duration = flightTime(from, target);
-    const delay = inAir ? 0 : CROUCH;
-
-    const moves: Keyframe[] = [];
-    const leans: Keyframe[] = [];
-    for (let i = 0; i <= SAMPLES; i++) {
-      const t = ease(i / SAMPLES);
-      moves.push(poseFrame(path(t)));
-      leans.push({ transform: `rotate(${(lean * Math.sin(Math.PI * t)).toFixed(2)}deg)` });
-    }
 
     setPhase("fly");
-    flight = p.root.animate(moves, { duration, delay, easing: "linear", fill: "both" });
-    extra(p.sprite, leans, { duration, delay });
-
-    if (!inAir) {
-      /* a small crouch, then a light spring up */
-      extra(p.img, eased("power2.out", [1, 1], [1.08, 0.9], squashFrame, 8), { duration: CROUCH });
-      extra(p.img, eased("power2.out", [1.08, 0.9], [0.95, 1.06], squashFrame, 8), {
-        duration: 110,
-        delay: CROUCH,
-      });
-      extra(p.img, eased("sine.inOut", [0.95, 1.06], [1, 1], squashFrame, 12), {
-        duration: 280,
-        delay: CROUCH + 110,
-      });
+    flight = jump(
+      { body: p.root, lean: p.sprite, sprite: p.img },
+      {
+        from,
+        to: target,
+        rise: now?.velocity ? Math.min(rise, 12) : rise,
+        duration: flightTime(from, target),
+        crouch: now || !crouch ? 0 : CROUCH,
+        timing: "sine.inOut",
+        velocity: now?.velocity,
+        squash,
+        give: onMark && disc ? MARK_GIVE : 0,
+        frame: poseFrame,
+      },
+    );
+    /* the mark gives under him on the very frame he touches down */
+    if (onMark && disc) {
+      loose.push(give(disc, (share) => ({ translate: `0 ${(share * MARK_GIVE).toFixed(2)}px` }), flight.touchdown));
     }
-
-    flight.finished.then(() => {
-      /* touch down: a soft squash that settles with one small overshoot */
-      extra(p.img, eased("power2.out", [1, 1], [1.1, 0.9], squashFrame, 6), { duration: 90 });
-      extra(p.img, eased("back.out(2)", [1.1, 0.9], [1, 1], squashFrame, 24), {
-        duration: 420,
-        delay: 90,
-      });
-      onLanded();
+    const current = flight;
+    current.body.finished.then(() => {
+      if (flight === current) {
+        rest = target;
+        onLanded();
+      }
     }, () => {});
   };
 
@@ -223,30 +162,28 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
         const p = parts();
         return p ? perchPose(homeBox(p.root, p.img)) : null;
       },
-      () => {
-        /* the mark gives a little under his weight */
-        if (disc) {
-          const dip = ([y]: number[]): Keyframe => ({ translate: `0 ${y}px` });
-          extra(disc, eased("power2.out", [0], [5], dip, 6), { duration: 90 });
-          extra(disc, eased("back.out(2)", [5], [0], dip, 24), { duration: 480, delay: 90 });
-        }
-        setPhase("sit");
-      },
+      () => setPhase("sit"),
     );
   };
 
-  /** Glide from the mark (or mid-air) back home to his corner. */
-  const leave = () => {
+  /** Glide from the mark (or mid-air) back home to his corner. `quick` skips
+      the crouch — for when the page is already scrolling the mark away. */
+  const leave = (quick = false) => {
     wantPerched = false;
     if (phase === "home") return;
     fly(
       () => HOME,
       () => {
-        /* home: let go of the flight so ClawdPet owns his position again */
-        flight?.cancel();
-        flight = null;
+        /* home: let go of the flight so ClawdPet owns his position again —
+           the landing squash plays out on its own */
+        if (flight) {
+          flight.body.cancel();
+          loose.push(...flight.animations.slice(1));
+          flight = null;
+        }
         setPhase("home");
       },
+      !quick,
     );
   };
 
@@ -258,12 +195,11 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
     const p = parts();
     if (!p) return;
     if (perched) {
-      flight = p.root.animate([poseFrame(perchPose(homeBox(p.root, p.img)))], {
-        duration: 0,
-        fill: "forwards",
-      });
+      rest = perchPose(homeBox(p.root, p.img));
+      held = p.root.animate([poseFrame(rest)], { duration: 0, fill: "forwards" });
       setPhase("sit");
     } else {
+      rest = HOME;
       setPhase("home");
     }
   };
@@ -284,6 +220,7 @@ export function createPerchJump(perch: HTMLElement, disc: HTMLElement | null) {
   const destroy = () => {
     window.removeEventListener("clawd-ready", onReady);
     stop();
+    rest = HOME;
     const p = parts();
     p?.root.style.removeProperty("transform-origin");
     perch.style.removeProperty("opacity");

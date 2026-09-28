@@ -1016,14 +1016,15 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   transform: none;
 }
 
-/* Clawd's feet sit at 76% of his sprite; the disc starts just above that so
-   his outer legs meet the curve and the middle ones overlap it */
+/* Clawd's ground line (the bottom of the shadow under him) is 81.25% down
+   his sprite; the disc starts a hair above it, so the shadow rests on the
+   top of the mark */
 .endcap-mark {
   position: relative;
   flex: 0 0 auto;
   display: block;
   width: var(--mark);
-  padding-top: calc(var(--clawd) * 0.71);
+  padding-top: calc(var(--clawd) * 0.8);
   color: var(--light);
   text-decoration: none;
 }
@@ -1057,7 +1058,7 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   margin-left: calc(var(--clawd) / -2);
   line-height: 0;
   pointer-events: none;
-  transform-origin: 50% 76%;
+  transform-origin: 50% 81.25%;
 }
 
 .endcap-clawd-spin,
@@ -1070,14 +1071,14 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
 }
 
 .endcap-clawd-squash {
-  transform-origin: 50% 76%;
+  transform-origin: 50% 81.25%;
 }
 
 .endcap-clawd img {
   grid-area: 1 / 1;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 8px 18px rgba(11, 9, 8, 0.45));
+  image-rendering: pixelated;
 }
 
 /* he flies in idle and types once seated; without JS he is simply seated */
@@ -1672,6 +1673,9 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
    clicked for a reaction but not dragged off it */
 .clawd-pet.is-flying .clawd-sprite {
   pointer-events: none;
+  /* a hover lift easing out as he takes off would be a second animation on
+     the sprite, and keep his lean off the compositor */
+  transition: none;
 }
 
 .clawd-pet.is-perched .clawd-sprite {
@@ -1688,12 +1692,15 @@ html:not(.has-cursor) .showcase-card:hover .sc-arrow svg,
   border-radius: 12px;
 }
 
+/* pixel art on a 96px grid: 96px is one CSS px per art pixel, and
+   nearest-neighbour keeps every edge crisp at any other size (a flight, the
+   mark). He squashes about his ground line, the bottom of his shadow. */
 .clawd-sprite img {
   width: 96px;
   height: 96px;
-  transform-origin: 50% 76%;
+  transform-origin: 50% 81.25%;
   object-fit: contain;
-  filter: drop-shadow(0 6px 18px rgba(11, 9, 8, 0.25));
+  image-rendering: pixelated;
 }
 
 .clawd-bubble {
@@ -2231,7 +2238,7 @@ html.has-cursor [data-cursor] * {
 
 /* ------------------------------------------------------------------ */
 /* 404 — the homepage's dark first act: starfield, orange arm, NEXOR   */
-/* blackletter numerals                                                 */
+/* blackletter numerals, and Clawd hopping across them                  */
 /* ------------------------------------------------------------------ */
 
 .nf {
@@ -2239,7 +2246,7 @@ html.has-cursor [data-cursor] * {
   min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: clamp(5rem, 12vh, 8rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vh, 5rem);
+  padding: clamp(4rem, 10vh, 7rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vh, 5rem);
   overflow: clip;
   color: var(--light);
   background: var(--dark);
@@ -2262,68 +2269,81 @@ html.has-cursor [data-cursor] * {
   text-align: center;
 }
 
-.nf-eyebrow {
-  /* Anton, like the hero's "Scroll to explore" cue */
-  font-family: var(--font-head);
-  font-size: clamp(1rem, 1.4vw, 1.3rem);
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: rgba(242, 237, 230, 0.6);
-}
-
-/* --nf is the digits' size; Clawd and his place on the 0 are sized off it.
-   The top margin leaves room for him above the digits. */
+/* --nf is the digits' size; Clawd and the room he hops in are sized off it.
+   The top margin is his height above the digits plus the top of his hops. */
 .nf-code {
-  --nf: clamp(6rem, min(30vw, 40vh), 20rem);
-  --nf-clawd: calc(var(--nf) * 0.27);
+  --nf: clamp(6rem, min(32vw, 44vh), 22rem);
+  --nf-clawd: calc(var(--nf) * 0.4);
   position: relative;
   display: flex;
   justify-content: center;
   gap: clamp(0.2rem, 1.5vw, 1.2rem);
-  margin: calc(var(--nf-clawd) * 0.72) 0 clamp(0.8rem, 2.4vh, 1.6rem);
+  margin: calc(var(--nf-clawd) * 0.75) 0 clamp(1.4rem, 4vh, 2.4rem);
   color: var(--accent);
   font-size: var(--nf);
-  filter: drop-shadow(0 18px 60px rgba(0, 0, 0, 0.85));
   user-select: none;
   will-change: transform;
 }
 
-/* Clawd sits on top of the 0: its ink starts 0.0475em below the digit's box
-   (measured from the glyph), and his feet are 76% down his sprite */
+/* his pixel grid is 96px: at a multiple of 48px every art pixel is a whole
+   number of device pixels on a 2x screen, so the edges stay perfectly even */
+@supports (width: round(1px, 1px)) {
+  .nf-code {
+    --nf-clawd: round(nearest, calc(var(--nf) * 0.4), 48px);
+  }
+}
+
+/* Clawd starts on top of the 0: its ink starts 0.0475em below the digit's
+   box (measured from the glyph), and his ground line — the bottom of his
+   shadow — is 81.25% down his sprite; it sinks a hair into the glyph.
+   Only the sprite takes the pointer — the button stays behind on the 0
+   while he hops about. */
 .nf-clawd {
   position: absolute;
   z-index: 1;
   left: 50%;
-  top: calc(var(--nf) * 0.0475 - var(--nf-clawd) * 0.74);
+  top: calc(var(--nf) * 0.0475 - var(--nf-clawd) * 0.8);
   width: var(--nf-clawd);
   margin-left: calc(var(--nf-clawd) / -2);
   padding: 0;
   border: 0;
   background: none;
   line-height: 0;
-  cursor: pointer;
+  pointer-events: none;
+}
+
+.nf-clawd-body,
+.nf-clawd-lean {
+  position: relative;
+  display: block;
+}
+
+/* the lean of a hop turns about his middle */
+.nf-clawd-lean {
+  transform-origin: 50% 51%;
 }
 
 .nf-clawd img {
   width: 100%;
   height: auto;
-  transform-origin: 50% 76%;
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+  transform-origin: 50% 81.25%;
+  image-rendering: pixelated;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.nf-clawd:focus-visible {
+.nf-clawd:focus-visible img {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 10px;
 }
 
-/* beside his head rather than above it, clear of the line over the 404 */
+/* over his head, and it hops along with him */
 .nf-bubble {
   position: absolute;
-  left: 86%;
-  bottom: 50%;
+  left: 50%;
+  bottom: 80%;
+  translate: -50% 0;
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   background: var(--light);
@@ -2335,14 +2355,14 @@ html.has-cursor [data-cursor] * {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
-  transform-origin: 0 100%;
+  transform-origin: 50% 100%;
   animation: nf-bubble-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes nf-bubble-in {
   from {
     opacity: 0;
-    transform: translateX(-6px) scale(0.9);
+    transform: translateY(6px) scale(0.9);
   }
 }
 
@@ -2358,16 +2378,21 @@ html.has-cursor [data-cursor] * {
 }
 
 /* the masks clip the rise; the padding leaves room for the blackletter
-   flags above the line box so nothing is cut once the digits have landed */
+   flags above the line box so nothing is cut once the digits have landed.
+   The shadow lifts the digits off the arm behind them — on each mask, not
+   on the whole 404, so Clawd hopping over them doesn't redraw it. */
 .nf-mask {
   display: inline-block;
   overflow: hidden;
   padding-top: 0.12em;
   margin-top: -0.12em;
+  filter: drop-shadow(0 16px 44px rgba(0, 0, 0, 0.8));
 }
 
+/* a digit gives under Clawd toward its baseline */
 .nf-digit {
   display: block;
+  transform-origin: 50% 100%;
   will-change: transform;
 }
 
@@ -2379,64 +2404,33 @@ html.has-cursor [data-cursor] * {
   font-family: var(--font-ext);
   font-weight: 700;
   text-transform: uppercase;
-  font-size: clamp(1.3rem, 3.6vw, 2.6rem);
+  font-size: clamp(1.05rem, 2vw, 1.5rem);
   line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .nf-copy {
-  margin-top: 1rem;
-  max-width: 32rem;
-  font-size: clamp(1rem, 1.25vw, 1.15rem);
-  line-height: 1.55;
-  color: rgba(242, 237, 230, 0.72);
-}
-
-.nf-trace {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.35rem 0.7rem;
-  max-width: 100%;
-  margin-top: clamp(1.2rem, 3vh, 2rem);
-  padding: 0.5rem 0.9rem;
-  border: 1px solid rgba(242, 237, 230, 0.14);
-  border-radius: 999px;
-  background: rgba(11, 9, 8, 0.6);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: rgba(242, 237, 230, 0.7);
-}
-
-.nf-trace-method {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.nf-trace-path {
-  overflow-wrap: anywhere;
-}
-
-.nf-trace-status {
-  color: var(--accent-soft);
+  margin-top: 0.8rem;
+  font-size: clamp(0.95rem, 1.1vw, 1.05rem);
+  line-height: 1.5;
+  color: rgba(242, 237, 230, 0.6);
 }
 
 .nf-actions {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: clamp(0.8rem, 2vw, 1.4rem);
-  margin-top: clamp(1.8rem, 4.5vh, 3rem);
+  margin-top: clamp(1.6rem, 4vh, 2.4rem);
 }
 
 @media (max-width: 899px) {
+  /* phones are mostly 3x screens: 64px is two device pixels per art pixel */
   .nf-code {
     --nf: clamp(6rem, 42vw, 12rem);
+    --nf-clawd: 64px;
   }
 
   .nf-actions {
     width: min(100%, 22rem);
-    display: grid;
-    grid-template-columns: 1fr;
   }
 
   .nf-actions .pill {

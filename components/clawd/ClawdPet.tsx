@@ -8,7 +8,10 @@ import {
   CLAWD_SPRITES,
   CLICK_REACTIONS,
   IDLE_FLAVOR,
+  NAP_CLIP,
   SCROLL_CLIPS,
+  SCROLL_DOWN_CLIP,
+  SCROLL_UP_CLIP,
   SECTION_CLIPS,
   type ClawdClip,
 } from "@/lib/clawd";
@@ -18,6 +21,8 @@ import {
 const PRIORITY: Record<string, number> = {
   idle: 0,
   flavor: 1,
+  /* dozing off after a while with nothing happening — until anything does */
+  nap: 1.5,
   section: 2,
   velocity: 3,
   /* flying to or sitting on the GitHub mark (perchJump.ts) — only a click
@@ -37,6 +42,10 @@ const IDLE_STATE: PetState = { clip: "IDLE", kind: "idle", until: Infinity };
 /* in the air he is his calm idle self; on the mark he opens his laptop */
 const FLY_STATE: PetState = { clip: "IDLE", kind: "perch", until: Infinity };
 const SIT_STATE: PetState = { clip: "TYPING", kind: "perch", until: Infinity };
+const NAP_STATE: PetState = { clip: NAP_CLIP, kind: "nap", until: Infinity };
+
+/** How long the page has to be left alone before he nods off (ms). */
+const NAP_AFTER = 30000;
 
 /** Loads the idle sprite (calls onReady once it can paint, or after a hard
     timeout) and warms the other clips off the critical path; returns a
@@ -155,6 +164,21 @@ export default function ClawdPet() {
     };
     scheduleFlavor();
 
+    /* left alone for a while, he nods off in his corner; the first scroll,
+       key or pointer move wakes him */
+    let lastActive = performance.now();
+    const wake = () => {
+      lastActive = performance.now();
+      if (stateRef.current.kind === "nap") {
+        stateRef.current = baseRef.current;
+        setState(baseRef.current);
+      }
+    };
+    window.addEventListener("pointermove", wake, { passive: true });
+    window.addEventListener("keydown", wake);
+    window.addEventListener("wheel", wake, { passive: true });
+    window.addEventListener("touchstart", wake, { passive: true });
+
     /* Hero-corner hide — Clawd steps aside while the hero owns the top-right
        corner, then re-appears past it. Polled from the hero's real on-screen
        position (in the scroll interval below) rather than a ScrollTrigger
@@ -208,9 +232,15 @@ export default function ClawdPet() {
 
     /* fast scrolling → a random work clip per burst (IDLE stays the baseline) */
     let velocityStart = 0;
+    let lastY = window.scrollY;
     const onScroll = () => {
       syncHero();
-      const velocity = Math.abs(lenisRef.current?.velocity ?? 0);
+      if (window.scrollY !== lastY) {
+        lastY = window.scrollY;
+        wake();
+      }
+      const signed = lenisRef.current?.velocity ?? 0;
+      const velocity = Math.abs(signed);
       if (velocity > 40) {
         if (!velocityStart) velocityStart = performance.now();
         if (performance.now() - velocityStart > 250) {
@@ -222,7 +252,14 @@ export default function ClawdPet() {
                ref avoids re-rendering Clawd every 200ms of a long scroll */
             stateRef.current = { ...current, until: performance.now() + 1500 };
           } else {
-            const clip = SCROLL_CLIPS[Math.floor(Math.random() * SCROLL_CLIPS.length)];
+            /* half the time the one for the way the page is going:
+               downloading on the way down, uploading on the way up */
+            const clip =
+              Math.random() < 0.5
+                ? signed > 0
+                  ? SCROLL_DOWN_CLIP
+                  : SCROLL_UP_CLIP
+                : SCROLL_CLIPS[Math.floor(Math.random() * SCROLL_CLIPS.length)];
             propose({ clip, kind: "velocity", until: performance.now() + 1500 });
           }
         }
@@ -256,6 +293,9 @@ export default function ClawdPet() {
 
     /* fall back to IDLE whenever the active state expires */
     const expiry = window.setInterval(() => {
+      if (phaseRef.current === "home" && performance.now() - lastActive > NAP_AFTER) {
+        propose(NAP_STATE);
+      }
       const current = stateRef.current;
       if (current.kind !== "idle" && performance.now() > current.until) {
         setState(baseRef.current);
@@ -264,6 +304,10 @@ export default function ClawdPet() {
 
     return () => {
       window.removeEventListener("clawd-perch", onPerch);
+      window.removeEventListener("pointermove", wake);
+      window.removeEventListener("keydown", wake);
+      window.removeEventListener("wheel", wake);
+      window.removeEventListener("touchstart", wake);
       window.clearTimeout(flavorTimer);
       window.clearInterval(scrollInterval);
       window.clearInterval(expiry);

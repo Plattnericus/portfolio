@@ -86,9 +86,12 @@ polished silver once the page turns cream.
 - **The intro** paints the real NEXOR letterforms on the very first frame — the
   wordmark's face is a 2 KB subset inlined into the stylesheet, so nothing waits
   on a font request.
-- **Clawd**, the pixel mascot, lives in the corner. He reacts to the section
-  you are in and to fast scrolling, can be dragged anywhere, and glides onto the
-  GitHub mark when the project row ends — and back home when you move on.
+- **Clawd**, the pixel mascot, lives in the corner — 22 hand-animated clips.
+  He reacts to the section you are in, downloads on the way down and uploads on
+  the way up when you scroll fast, dozes off if you leave him alone, can be
+  dragged anywhere, and glides onto the GitHub mark when the project row ends —
+  and back home when you move on. On the 404 he hops from digit to digit, over
+  to whichever one you point at.
 - **Every button** rolls its label over letter by letter and swaps its icon on
   hover, and leans a little toward the pointer.
 - **The browser tab** keeps up with you: the favicon draws your scroll progress
@@ -129,19 +132,29 @@ warp-tunnel starfield in step — no state passed between the two layers.
 by script before each ScrollTrigger refresh, never GSAP's `position: fixed` pin
 — that is what keeps layout shift at zero, even across resizes and rotations.
 
-**Compositor-first motion.** Clawd's flights are baked into keyframes and played
-through the Web Animations API, so the browser runs them on the compositor at the
-display's own refresh rate however busy the page is. Scroll-driven writes only
-touch `transform` and `opacity`, and only when a value actually changes.
+**Compositor-first motion.** Every one of Clawd's jumps — crouch, arc, lean,
+squash, landing, the spot giving under him — is baked into keyframes up front,
+exactly one animation per element, and played through the Web Animations API.
+That is what lets the browser run all of it on the compositor at the display's
+own refresh rate: 120 fps on a ProMotion screen, and still drawing while the
+main thread is blocked. A jump that cuts another short picks up his speed
+mid-air instead of stopping dead. Scroll-driven writes only touch `transform`
+and `opacity`, and only when a value actually changes.
+
+**One clip at a time.** With two or more videos playing, Chrome treats a page
+like a video call and runs the whole display at the videos' 30 Hz — every
+animation on it included (measured on a 120 Hz Mac: 121 fps with one clip, 31
+with two). So only the clip under the middle of the screen plays; the others
+hold their frame until it's their turn.
 
 **Nothing loads before it has to.**
 
 | Piece | Budget |
 |---|---|
 | First load | 249 KB of gzipped JS; the 3D bundle (Three.js + R3F) loads after it, off the critical path |
-| Project clips | 3.4 MB for all seven, H.264 at 912×684, fetched only after the intro and within two screens of view |
+| Project clips | 3.4 MB for all seven, H.264 at 912×684, fetched only after the intro and within two screens of view, one playing at a time |
 | 3D | a single 84 KB arm model, loaded through three's own `GLTFLoader` — no decoders shipped for compression it doesn't use |
-| Mascot | sprites warm up at low priority once the page is idle, desktop only |
+| Mascot | 49 KB for all 22 clips, warmed up at low priority once the page is idle, desktop only |
 | Caching | clips, model, posters and fonts cached for a week with stale-while-revalidate |
 
 **Built for machines as well as people.** JSON-LD for the person, site and every
@@ -181,7 +194,7 @@ app/
   page.tsx               section order, JSON-LD graph
   layout.tsx              fonts, global metadata
   globals.css              design tokens and every section's styles
-  not-found.tsx             404: starfield, orange arm, blackletter digits
+  not-found.tsx             404: starfield, orange arm, Clawd hopping across the digits
   ai/                        crawler-readable profile page
   robots.ts, sitemap.ts       search surface
   *-image.tsx, icon.tsx        generated Open Graph images and icons
@@ -189,7 +202,7 @@ app/
 components/
   lenis-style/   the sections — Hero, Why, Showcase, Rethink, Solution, Heat, Footer
   gl/            the scroll-synced R3F scene, the 404 scene, the shared arm, WebGL guards
-  clawd/         the mascot and his flights to and from the GitHub mark
+  clawd/         the mascot, his jump engine, the GitHub-mark flights, the 404 hops
   loader/        the NEXOR intro
   motion/        custom cursor, living favicon, reduced-motion notice
   providers/     Lenis + ScrollTrigger wiring
@@ -215,9 +228,12 @@ lib/
   from tail to head so they loop without a jump.
 - **Posters** (`public/showcase/`) are only listed in the sitemap for image
   search — 1200px WebP.
-- **Clawd's clips** (`public/models/mascot/webp/`) are animated WebP at 192px,
-  twice their display size. Bump `ASSET_VERSION` in `lib/clawd.ts` whenever they
-  are regenerated.
+- **Clawd's clips** (`public/models/mascot/webp/`) are pixel art on a 96px grid,
+  stored at exactly 2x as lossless animated WebP — frame for frame identical to
+  the source GIFs at a fraction of their size — and drawn with
+  `image-rendering: pixelated`. His ground line (the bottom of his shadow) is
+  81.25% down the sprite; everything he lands on is aligned to it. Bump
+  `ASSET_VERSION` in `lib/clawd.ts` whenever they are regenerated.
 - **The NEXOR face** is an inlined subset of UnifrakturCook (only N E X O R, the
   digits and the space). A new letter in the wordmark means regenerating it from
   `public/fonts/UnifrakturCook/` — see the comment in `globals.css`.

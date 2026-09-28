@@ -106,7 +106,9 @@ export default function Showcase() {
           if (!jump) return;
           if (instant) jump.settle(next);
           else if (next) jump.land(remaining);
-          else jump.leave();
+          /* past the end the page is already carrying the mark away, so he
+             takes off at once instead of crouching on the spot */
+          else jump.leave(pastEnd);
         };
 
         const syncMark = (instant = false) => {
