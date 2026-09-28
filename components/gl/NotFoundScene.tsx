@@ -30,6 +30,13 @@ const STREAK_LENGTH = 0.9;
 
 type StarSim = { x: Float32Array; y: Float32Array; z: Float32Array; glow: Float32Array };
 
+/** 0 → 1 once "Back to Nexor" is clicked: the field jumps to lightspeed —
+    faster, longer and brighter streaks — while the arm drops away. Eased in
+    the frame loop, so it builds up instead of switching on. */
+const warp = { target: 0, value: 0 };
+const WARP_SPEED = 26;
+const WARP_STREAK = 7;
+
 function buildStars(count: number): StarSim {
   const x = new Float32Array(count);
   const y = new Float32Array(count);
@@ -77,7 +84,11 @@ function Starfield({ count }: { count: number }) {
     const lines = linePos.array as Float32Array;
     const lineColors = lineCol.array as Float32Array;
 
-    const travel = DRIFT * Math.min(delta * 60, 3);
+    warp.value += (warp.target - warp.value) * Math.min(1, delta * 3.2);
+    const boost = warp.value * warp.value;
+    const travel = DRIFT * (1 + boost * WARP_SPEED) * Math.min(delta * 60, 3);
+    const streak = STREAK_LENGTH + boost * WARP_STREAK;
+    const trail = 0.35 + boost * 0.65;
     for (let i = 0; i < count; i++) {
       let depth = z[i] + travel;
       if (depth > NEAR_Z) depth -= SPAN;
@@ -99,11 +110,11 @@ function Starfield({ count }: { count: number }) {
       lines[l + 2] = depth;
       lines[l + 3] = x[i];
       lines[l + 4] = y[i];
-      lines[l + 5] = depth - STREAK_LENGTH;
+      lines[l + 5] = depth - streak;
       /* tail stays black — additive blending turns it into a fading trail */
-      lineColors[l] = STREAK_COLOR.r * fade * 0.35;
-      lineColors[l + 1] = STREAK_COLOR.g * fade * 0.35;
-      lineColors[l + 2] = STREAK_COLOR.b * fade * 0.35;
+      lineColors[l] = STREAK_COLOR.r * fade * trail;
+      lineColors[l + 1] = STREAK_COLOR.g * fade * trail;
+      lineColors[l + 2] = STREAK_COLOR.b * fade * trail;
     }
     dotsPos.needsUpdate = true;
     dotsCol.needsUpdate = true;
@@ -154,7 +165,10 @@ function ReachingHand() {
     const rise = easeOutCubic(THREE.MathUtils.clamp((t - 0.35) / 1.9, 0, 1));
     const sway = Math.sin(t * 0.7);
     const x = (portrait ? 0.2 : 0.24) * width + pointer.x * 0.18;
-    const y = THREE.MathUtils.lerp(-1.25, portrait ? -0.52 : -0.47, rise) * height + sway * 0.05;
+    const y =
+      THREE.MathUtils.lerp(-1.25, portrait ? -0.52 : -0.47, rise) * height +
+      sway * 0.05 -
+      warp.value * warp.value * height * 0.9;
     const scale = (portrait ? 0.017 : 0.02) * height * (RAW_ARM_HEIGHT / NORMALIZED_ARM_HEIGHT);
     rig.position.set(x, y, 0);
     rig.rotation.set(
@@ -184,8 +198,26 @@ function PointerCamera() {
   return null;
 }
 
+/** Fresh canvases allowed after a lost WebGL context before giving up. */
+const MAX_RESTARTS = 2;
+
 export default function NotFoundScene() {
   const [mode, setMode] = useState<{ compact: boolean } | null>(null);
+  /* React's development double mount unmounts the canvas and mounts it
+     straight back — and R3F force-loses the context of an unmounted canvas
+     500ms later, which then hits the one that came back. A lost context (that
+     one, or a real GPU reset) gets a brand-new canvas instead of a dead one. */
+  const [generation, setGeneration] = useState(0);
+
+  useEffect(() => {
+    warp.target = 0;
+    warp.value = 0;
+    const onWarp = () => {
+      warp.target = 1;
+    };
+    window.addEventListener("nf-warp", onWarp);
+    return () => window.removeEventListener("nf-warp", onWarp);
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -202,6 +234,14 @@ export default function NotFoundScene() {
       {mode && (
         <GLErrorBoundary>
           <Canvas
+            key={generation}
+            onCreated={({ gl }) => {
+              gl.domElement.addEventListener(
+                "webglcontextlost",
+                () => setGeneration((count) => Math.min(count + 1, MAX_RESTARTS)),
+                { once: true },
+              );
+            }}
             dpr={mode.compact ? [1, 1.25] : [1, 1.75]}
             camera={{ position: [0, 0, 6], fov: 42 }}
             gl={{ alpha: true, antialias: true, failIfMajorPerformanceCaveat: false }}

@@ -117,10 +117,21 @@ export default function IntroLoader() {
        once while a slow one stared at a dead orange rectangle for half a
        second first. Anchoring to paint makes the intro run identically on
        both, which is what actually makes it feel deliberate. */
+    /* The rise's own start is the real anchor: on a fresh load it is first
+       paint, but after a client-side navigation (the 404's "Back to Nexor")
+       first paint happened long ago on the other page, and anchoring to it
+       made the curtain leave before a single glyph had risen. */
+    const rise = root.querySelector(".intro-glyph")?.getAnimations?.()[0];
     const paint = performance
       .getEntriesByType("paint")
       .find((entry) => entry.name === "first-contentful-paint");
-    const sincePaint = paint ? performance.now() - paint.startTime : 0;
+    /* a rise that is still pending (no start time yet) is starting right now */
+    const anchor = rise
+      ? typeof rise.startTime === "number"
+        ? rise.startTime
+        : performance.now()
+      : (paint?.startTime ?? performance.now());
+    const sincePaint = Math.max(0, performance.now() - anchor);
     const after = (target: number) => Math.max(0, target - sincePaint);
 
     const earliestTimer = window.setTimeout(() => {
