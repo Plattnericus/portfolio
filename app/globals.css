@@ -133,6 +133,14 @@ video {
   -webkit-user-drag: none;
 }
 
+/* every video here only feeds a canvas: never a native play button on it
+   (iOS draws one over a film it will not start, as in Low Power Mode) */
+video::-webkit-media-controls,
+video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -154,6 +162,9 @@ video {
   color: var(--dim);
 }
 
+/* out of sight until a keyboard reaches it: not drawn and not tappable, even
+   when a phone pulls the page past its top edge (a link merely moved above
+   the screen showed up there as a white box) */
 .skip {
   position: fixed;
   z-index: 200;
@@ -163,11 +174,15 @@ video {
   background: var(--fg);
   color: var(--bg);
   font-size: var(--fs-s);
-  transform: translateY(-200%);
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .skip:focus-visible {
-  transform: none;
+  clip-path: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .accent {

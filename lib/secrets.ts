@@ -39,7 +39,7 @@ export type SecretId = (typeof SECRETS)[number];
 
 /*
  * How each one is found is written down once, in lib/secret-notes.json, and
- * `npm run readme` prints it into the Secrets section of the README (it also runs
+ * `npm run readme` prints it into the folded end of the README (it also runs
  * before every build, and `npm run lint` fails if the README is behind).
  */
 

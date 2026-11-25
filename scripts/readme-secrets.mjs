@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /*
- * Writes the Secrets section of README.md from the list in lib/secrets.ts
- * and the notes in lib/secret-notes.json, so the README never falls behind
- * the site. Runs before every build (prebuild).
- *   node scripts/readme-secrets.mjs          rewrite the section
+ * Writes the end of README.md from the list in lib/secrets.ts and the notes
+ * in lib/secret-notes.json, so the README never falls behind the site.
+ * Runs before every build (prebuild).
+ *   node scripts/readme-secrets.mjs          rewrite the block
  *   node scripts/readme-secrets.mjs --check  fail if it is out of date
  *
- * The section is spoiler-safe by layers: a warning and a count per place up
- * front, then hints (folded), then the full solutions (folded, one table
- * per place, behind a second warning).
+ * The block stays out of sight: a folded dot after the footer, no heading
+ * (GitHub would list it in the outline), nothing linked from above. Inside,
+ * one folded line per secret, grouped by where it is found. The line is only
+ * a hint; the name and the full solution sit behind it.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -21,7 +22,7 @@ const END = "<!-- secrets:end -->";
 
 /** where a secret is found, in the order the README lists them */
 const PLACES = {
-  shell: { label: "Shell", what: "typed into the shell: <kbd>`</kbd> or <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd>" },
+  shell: { label: "Shell", what: "typed into the shell, <kbd>`</kbd> or <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd>" },
   keys: { label: "Typed anywhere", what: "typed on the page itself, no field needed" },
   pointer: { label: "Mouse and touch", what: "clicked, held, dragged, swiped or scrolled" },
   elsewhere: { label: "Elsewhere", what: "outside the page, or by doing nothing at all" },
@@ -44,71 +45,49 @@ if (broken.length) {
   process.exit(1);
 }
 
-/** a table cell: one line, no stray pipes */
-const cell = (s) => s.replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|");
-const num = (id) => String(ids.indexOf(id) + 1).padStart(2, "0");
-const inPlace = (key) => ids.filter((id) => notes[id].where === key);
-const places = Object.keys(PLACES).filter((key) => inPlace(key).length);
+/** one line; <summary> is HTML, so markdown is not parsed there */
+const line = (s) => s.replace(/\s*\n\s*/g, " ").trim();
+const html = (s) => line(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const overview = [
-  "| Where | How | Secrets |",
-  "| --- | --- | ---: |",
-  ...places.map((key) => `| **${PLACES[key].label}** | ${PLACES[key].what} | ${inPlace(key).length} |`),
-  `| **Total** | | **${ids.length}** |`,
-].join("\n");
+const places = Object.keys(PLACES).filter((key) => ids.some((id) => notes[id].where === key));
+// numbered in the order they are listed, so the list reads 01 to the end
+const order = places.flatMap((key) => ids.filter((id) => notes[id].where === key));
+const num = (id) => String(order.indexOf(id) + 1).padStart(2, "0");
 
-const hints = [
-  "| # | Where | Hint |",
-  "| ---: | --- | --- |",
-  // no names here: for most of them the name is the answer
-  ...ids.map((id) => `| ${num(id)} | ${PLACES[notes[id].where].label} | ${cell(notes[id].hint)} |`),
-].join("\n");
+const entry = (id) => `<details>
+<summary><code>${num(id)}</code>&nbsp; ${html(notes[id].hint)}</summary>
 
-const solutions = places
-  .map((key) => {
-    const rows = inPlace(key).map((id) => `| ${num(id)} | **${cell(notes[id].title)}** | ${cell(notes[id].how)} |`);
-    return `<details>
-<summary><b>${PLACES[key].label}</b> &nbsp;·&nbsp; ${rows.length} ${rows.length === 1 ? "secret" : "secrets"}</summary>
-
-<br />
-
-| # | Secret | How |
-| ---: | --- | --- |
-${rows.join("\n")}
+> **${line(notes[id].title)}**<br />
+> ${line(notes[id].how)}
 
 </details>`;
+
+const groups = places
+  .map((key) => {
+    const inPlace = order.filter((id) => notes[id].where === key);
+    return `<br />
+
+<b>${PLACES[key].label}</b> &nbsp;<sub>${inPlace.length} &nbsp;·&nbsp; ${PLACES[key].what}</sub>
+
+${inPlace.map(entry).join("\n")}`;
   })
   .join("\n\n");
 
 const block = `${START}
-## Secrets
-
-> [!WARNING]
-> **Spoilers ahead.** The site hides ${ids.length} secrets, and finding them yourself is the fun part. Everything below gives them away, one layer at a time: first where to look, then hints, then the full solutions. Open only as much as you want to know.
-
-\`secrets\` in the shell counts the ones you have found, and a card slides in at the top right for each new one. Only their names are kept, in your browser's \`localStorage\`.
-
-${overview}
-
-### Hints
-
-A nudge for each, without the answer and without the name, which for most of them would be the answer. The numbers match the solutions.
-
 <details>
-<summary><b>Show the hints</b></summary>
+<summary><sub>&nbsp;.&nbsp;</sub></summary>
 
 <br />
 
-${hints}
+You looked. The site hides ${ids.length} secrets. \`secrets\` in the shell counts the ones you have found, and a card slides in at the top right for each new one.
+
+Every line is only a hint. Open it for the answer.
+
+${groups}
+
+<br />
 
 </details>
-
-### Solutions
-
-> [!CAUTION]
-> **Full spoilers.** Each list below gives away every secret in it, step by step.
-
-${solutions}
 ${END}`;
 
 const readme = readFileSync(readmePath, "utf8");
