@@ -1,9 +1,11 @@
-import { CanvasTexture, Color, DataTexture, HalfFloatType, LinearFilter, MathUtils, Mesh, NearestFilter, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, Vector2, Vector3, Vector4, WebGLRenderTarget, WebGLRenderer } from "three";
+import { CanvasTexture, Color, DataTexture, HalfFloatType, LinearFilter, MathUtils, Mesh, NearestFilter, NoBlending, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, Vector2, Vector3, Vector4, WebGLRenderTarget, WebGLRenderer } from "three";
 import { countGlyphs } from "../ascii/stats";
+import { site } from "../site";
 import { digitField, textField, type TextField } from "./sdf-text";
 import { fovFit } from "./path";
 import { Starfield } from "./stars";
-import { CUTS, Z, asciiFragment, fullVertex, sceneFragment } from "./shaders";
+import { CUTS, LETTERS, Z, asciiCells, asciiGlyphs, fullVertex, sceneFragment } from "./shaders";
+import { designUnit } from "../unit";
 
 /*
  * The whole page background: one ray-marched world and a pass that prints
@@ -17,18 +19,26 @@ const STARS = ".+*";
 const NOISE = "#%&*+=<>/[]{}?!$@0123456789";
 const ATLAS = RAMP + EDGES + STARS + NOISE;
 
+
+
 export type CameraPose = { pos: Vector3; target: Vector3; fov: number; roll: number };
 
 export type QuietRect = { x: number; y: number; w: number; h: number };
 
+/** one letter of the wordmark moved from its place: world offset and scale */
+export type Letter = { x: number; y: number; s: number };
+
 export class World {
   readonly renderer: WebGLRenderer;
   private sceneRT: WebGLRenderTarget;
+  /** one texel per character cell: its glyph and colour (see asciiCells) */
+  private cellsRT: WebGLRenderTarget;
   private quadScene = new Scene();
   private quadCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private quad: Mesh;
   private sceneMat: ShaderMaterial;
   private asciiMat: ShaderMaterial;
+  private glyphMat: ShaderMaterial;
   private atlas: CanvasTexture | null = null;
   private stars = new Starfield();
   /** signed scroll speed, drives the hyperspace streaks */
@@ -49,7 +59,7 @@ export class World {
     roll: 0,
   };
   fx = { flash: 0, implode: 0, warp: 0, sweep: 0 };
-  /** click shockwaves: css px position and start time */
+  /** click ripples: css px position and start time */
   private waves: { x: number; y: number; t: number }[] = [];
   private now = 0;
 
@@ -57,23 +67,35 @@ export class World {
   cutting = false;
   /** cut points in text-local world units, with their birth time */
   private cuts: { x: number; y: number; t: number }[] = [];
+  /** how many cuts are open right now */
+  get openCuts() {
+    return this.cuts.length;
+  }
   private cutU = Array.from({ length: CUTS }, () => new Vector4());
+  /** a whole turn about its upright axis, radians (the `whirl` secret) */
+  spin = 0;
+  /**
+   * Each letter of the wordmark moved from its place (the loader flies them
+   * in, the `wave` secret hops them); null while they all rest.
+   */
+  letters: Letter[] | null = null;
+  private letterU = Array.from({ length: LETTERS }, () => new Vector4(0, 0, 1, 0));
   /** a held click charging at (x, y) css px; p 0..1 */
   charge = { x: 0, y: 0, p: 0 };
 
-  /** a ring that runs out from (x, y) in css px */
+  /** a small ripple that runs out from (x, y) in css px */
   addWave(x: number, y: number) {
     this.waves.push({ x, y, t: this.now });
     if (this.waves.length > 3) this.waves.shift();
   }
   /** 0 none, 1 snow, 2 petals, 3 fireflies, 4 leaves */
-  weather = { kind: 0, a: new Color(), b: new Color() };
   private light = new Vector3(-0.5, 0.6, 0.7);
   private lightPos = new Vector3();
   private blank: DataTexture;
   private balls = Array.from({ length: 5 }, () => new Vector4());
   morph = 0;
-  digits: [number, number, number] | null = [0, 0, 0];
+  /** the old loading counter; off unless a scene asks for it (see buildDigits) */
+  digits: [number, number, number] | null = null;
   /** the old corridor of 3D screens; the projects play as 2D films now */
   screensOn = false;
   quiet: QuietRect[] = [];
@@ -92,6 +114,12 @@ export class World {
       type: HalfFloatType,
       minFilter: NearestFilter,
       magFilter: LinearFilter,
+      depthBuffer: false,
+    });
+    this.cellsRT = new WebGLRenderTarget(1, 1, {
+      type: HalfFloatType,
+      minFilter: NearestFilter,
+      magFilter: NearestFilter,
       depthBuffer: false,
     });
     this.blank = new DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
@@ -119,7 +147,7 @@ export class World {
         tDigits: { value: this.blank },
         uDigitSlot: { value: new Vector2(1, 1) },
         uDigits: { value: new Vector3(0, 0, 0) },
-        uDigitsOn: { value: 1 },
+        uDigitsOn: { value: 0 },
         uBalls: { value: this.balls },
         uMorph: { value: 0 },
         uBlobSpin: { value: 0 },
@@ -129,6 +157,11 @@ export class World {
         uVidB: { value: -1 },
         uScreensOn: { value: 1 },
         uTextOn: { value: 1 },
+        uLetter: { value: this.letterU },
+        uLetterEdge: { value: new Array<number>(LETTERS + 1).fill(0) },
+        uLetterCount: { value: 0 },
+        uLettersOn: { value: 0 },
+        uTilt: { value: new Vector2() },
         uCuts: { value: this.cutU },
         uCutsOn: { value: 0 },
       },
@@ -140,20 +173,19 @@ export class World {
     const n0 = s0 + STARS.length;
     this.asciiMat = new ShaderMaterial({
       vertexShader: fullVertex,
-      fragmentShader: asciiFragment({
+      fragmentShader: asciiCells(site.colors.fg, {
         tiles: ATLAS.length,
         ramp: [r0, RAMP.length],
         edges: e0,
         stars: s0,
         noise: [n0, NOISE.length],
       }),
-      transparent: true,
+      // written as data, not blended
+      blending: NoBlending,
       depthTest: false,
       depthWrite: false,
-      premultipliedAlpha: true,
       uniforms: {
         tScene: { value: this.sceneRT.texture },
-        tAtlas: { value: this.blank },
         uGrid: { value: new Vector2(1, 1) },
         uCell: { value: new Vector2(8, 15) },
         uOffset: { value: new Vector2() },
@@ -165,11 +197,27 @@ export class World {
         uWarp: { value: 0 },
         uSweep: { value: 0 },
         uQuiet: { value: Array.from({ length: 4 }, () => new Vector4()) },
-        uInk: { value: new Color("#efeae2") },
+        uInk: { value: new Color(site.colors.fg) },
         tStars: { value: this.stars.target.texture },
-        uWeather: { value: 0 },
-        uWeatherA: { value: new Color() },
-        uWeatherB: { value: new Color() },
+      },
+    });
+    // the glyphs share the grid, the implosion and the charge with the cells
+    const cu = this.asciiMat.uniforms;
+    this.glyphMat = new ShaderMaterial({
+      vertexShader: fullVertex,
+      fragmentShader: asciiGlyphs(ATLAS.length),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      premultipliedAlpha: true,
+      uniforms: {
+        tCells: { value: this.cellsRT.texture },
+        tAtlas: { value: this.blank },
+        uGrid: cu.uGrid,
+        uCell: cu.uCell,
+        uOffset: cu.uOffset,
+        uImplode: cu.uImplode,
+        uCharge: cu.uCharge,
       },
     });
 
@@ -178,8 +226,40 @@ export class World {
     this.quadScene.add(this.quad);
   }
 
-  /** builds the distance fields; needs the display font loaded */
-  build(displayFont: string) {
+  /*
+   * Every shader compiled before the first frame, all at once and, where the
+   * browser can (KHR_parallel_shader_compile), off the thread that draws the
+   * page: no frame waits on the compiler, so nothing that is moving (the
+   * loader's letters) stutters. Each is compiled for the target it draws
+   * into, since that is part of the program.
+   */
+  warm(): Promise<unknown> {
+    const r = this.renderer;
+    const geometry = this.quad.geometry;
+    const into = (target: WebGLRenderTarget | null, material: ShaderMaterial) => {
+      const scene = new Scene();
+      const mesh = new Mesh(geometry, material);
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      r.setRenderTarget(target);
+      const done = r.compileAsync(scene, this.quadCam);
+      r.setRenderTarget(null);
+      return done;
+    };
+    return Promise.all([
+      into(this.sceneRT, this.sceneMat),
+      into(this.cellsRT, this.asciiMat),
+      into(null, this.glyphMat),
+      this.stars.warm(r),
+    ]);
+  }
+
+  /**
+   * Builds the distance fields; needs the display font loaded. The two
+   * fields are made in separate tasks, so neither holds the page for long.
+   */
+  async build(displayFont: string) {
+    const nextTask = () => new Promise<void>((res) => setTimeout(res, 0));
     this.text = textField("NEXOR", displayFont, {
       worldWidth: 12,
       w: 1400,
@@ -187,13 +267,27 @@ export class World {
       tracking: 0.02,
       fill: 0.9,
     });
-    const at = textField("@", displayFont, { worldWidth: 6.4, w: 512, h: 512, fill: 0.86 });
-    const digits = digitField(displayFont, 2.6);
+    await nextTask();
+    // the @ from the mono face: its round, classic shape reads as an @ at
+    // any angle; the display face's square one reads as a G in characters
+    const at = textField("@", this.fontFamily, { worldWidth: 6.4, w: 512, h: 512, fill: 0.86, weight: 800 });
     const u = this.sceneMat.uniforms;
     u.tText.value = this.text.texture;
+    // where each letter's slab of the field begins and ends, for moving them one by one
+    const c = this.text.centers.slice(0, LETTERS);
+    const edges = u.uLetterEdge.value as number[];
+    c.forEach((x, i) => (edges[i] = i === 0 ? -this.text!.size.x / 2 : (c[i - 1] + x) / 2));
+    edges[c.length] = this.text.size.x / 2;
+    u.uLetterCount.value = c.length;
     u.uTextSize.value.copy(this.text.size);
     u.tAt.value = at.texture;
     u.uAtSize.value.copy(at.size);
+  }
+
+  /** the 3D counter's digits, only built when something wants to show them */
+  buildDigits(displayFont: string) {
+    const digits = digitField(displayFont, 2.6);
+    const u = this.sceneMat.uniforms;
     u.tDigits.value = digits.texture;
     u.uDigitSlot.value.copy(digits.slot);
   }
@@ -221,7 +315,7 @@ export class World {
     tex.magFilter = LinearFilter;
     tex.generateMipmaps = false;
     this.atlas = tex;
-    this.asciiMat.uniforms.tAtlas.value = tex;
+    this.glyphMat.uniforms.tAtlas.value = tex;
   }
 
   resize(width: number, height: number) {
@@ -230,11 +324,14 @@ export class World {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.renderer.setPixelRatio(this.dpr);
     this.renderer.setSize(width, height, false);
-    const base = width < 700 ? 6 : width > 1900 ? 8 : 7.2;
+    // finer characters on phones, so the world keeps its detail on a small
+    // screen; past 1920 they grow with the page, so a large screen looks the same
+    const base = width < 520 ? 4.2 : width < 700 ? 6 : width > 1900 ? 8 * designUnit() : 7.2;
     this.cell = { w: base, h: Math.round(base * 1.9) };
     this.cols = Math.floor(width / this.cell.w);
     this.rows = Math.floor(height / this.cell.h);
     this.sceneRT.setSize(this.cols * 2, this.rows * 2);
+    this.cellsRT.setSize(this.cols, this.rows);
     this.stars.resize(this.cols, this.rows, width / height);
     const u = this.asciiMat.uniforms;
     u.uGrid.value.set(this.cols, this.rows);
@@ -244,6 +341,89 @@ export class World {
       ((height - this.rows * this.cell.h) / 2) * this.dpr,
     );
     this.buildAtlas();
+  }
+
+  /** keeps the wordmark out of the picture (while the loader hands over to it) */
+  hideText = false;
+
+  /** a point of the world on screen, in css px, for the current pose; null behind the camera */
+  project(x: number, y: number, z: number) {
+    const p = this.pose;
+    const f = new Vector3().subVectors(p.target, p.pos).normalize();
+    const worldUp = new Vector3(Math.sin(p.roll), Math.cos(p.roll), 0);
+    const r = new Vector3().crossVectors(f, worldUp).normalize();
+    const up = new Vector3().crossVectors(r, f).normalize();
+    const aspect = this.width / this.height;
+    const tan = Math.tan(MathUtils.degToRad(p.fov / 2)) * fovFit(aspect);
+    const d = new Vector3(x, y, z).sub(p.pos);
+    const depth = d.dot(f);
+    if (depth <= 0.01) return null;
+    return {
+      x: ((1 + d.dot(r) / (depth * tan * aspect)) * this.width) / 2,
+      y: ((1 - d.dot(up) / (depth * tan)) * this.height) / 2,
+    };
+  }
+
+  /**
+   * The tops of the wordmark's letters on screen, for drawing what rests on
+   * them: pairs of css px x, y in `out`, how many, the screen width of one
+   * column, and the open cuts (css px centre and radius) so nothing is
+   * drawn where the cursor has cut the letters away. Null while the name is not
+   * standing still on screen (hidden, flown through, its letters moving, or
+   * the word spinning).
+   */
+  tops(out: Float32Array) {
+    const text = this.text;
+    const p = this.pose;
+    const front = Z.text + 0.34;
+    if (!text || this.hideText || this.letters || this.spin !== 0 || p.pos.z < front + 0.5) return null;
+    const f = new Vector3().subVectors(p.target, p.pos).normalize();
+    const worldUp = new Vector3(Math.sin(p.roll), Math.cos(p.roll), 0);
+    const r = new Vector3().crossVectors(f, worldUp).normalize();
+    const up = new Vector3().crossVectors(r, f).normalize();
+    const aspect = this.width / this.height;
+    const tan = Math.tan(MathUtils.degToRad(p.fov / 2)) * fovFit(aspect);
+    const t = text.tops;
+    const n = Math.min(t.length, out.length) / 2;
+    let count = 0;
+    let step = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = t[i * 2] - p.pos.x;
+      const dy = t[i * 2 + 1] - p.pos.y;
+      const dz = front - p.pos.z;
+      const depth = dx * f.x + dy * f.y + dz * f.z;
+      if (depth <= 0.01) continue;
+      out[count * 2] = ((1 + (dx * r.x + dy * r.y + dz * r.z) / (depth * tan * aspect)) * this.width) / 2;
+      out[count * 2 + 1] = ((1 - (dx * up.x + dy * up.y + dz * up.z) / (depth * tan)) * this.height) / 2;
+      if (!step) step = (text.step / (depth * tan * aspect)) * (this.width / 2);
+      count++;
+    }
+    // where the cursor has cut the letters open, nothing can rest
+    const holes: { x: number; y: number; r: number }[] = [];
+    for (const u of this.cutU) {
+      if (u.w <= 0.001) continue;
+      const c = this.project(u.x, u.y, front);
+      const edge = this.project(u.x + u.w, u.y, front);
+      if (c && edge) holes.push({ x: c.x, y: c.y, r: Math.abs(edge.x - c.x) * 1.2 });
+    }
+    return { count, step, holes };
+  }
+
+  /** the point on the plane z = `z` under a screen point (css px), for the current pose */
+  unproject(sx: number, sy: number, z: number) {
+    const p = this.pose;
+    const f = new Vector3().subVectors(p.target, p.pos).normalize();
+    const worldUp = new Vector3(Math.sin(p.roll), Math.cos(p.roll), 0);
+    const r = new Vector3().crossVectors(f, worldUp).normalize();
+    const up = new Vector3().crossVectors(r, f).normalize();
+    const aspect = this.width / this.height;
+    const tan = Math.tan(MathUtils.degToRad(p.fov / 2)) * fovFit(aspect);
+    const nx = (sx / this.width) * 2 - 1;
+    const ny = 1 - (sy / this.height) * 2;
+    const dir = f.add(r.multiplyScalar(nx * tan * aspect)).add(up.multiplyScalar(ny * tan));
+    if (Math.abs(dir.z) < 1e-6) return null;
+    const t = (z - p.pos.z) / dir.z;
+    return { x: p.pos.x + dir.x * t, y: p.pos.y + dir.y * t };
   }
 
   /** pointer in css px, or null when there is none */
@@ -291,10 +471,21 @@ export class World {
     su.uScreensOn.value = this.screensOn ? 1 : 0;
     // past the O the wordmark is behind us; drawing it would only show
     // stray edges behind the copy when the camera turns around
-    su.uTextOn.value = this.pose.pos.z > -10 ? 1 : 0;
+    su.uTextOn.value = this.pose.pos.z > -10 && !this.hideText ? 1 : 0;
+    const L = this.letters;
+    su.uLettersOn.value = L && this.text ? 1 : 0;
+    if (L && this.text) {
+      const centers = this.text.centers;
+      for (let i = 0; i < LETTERS; i++) {
+        const l = L[i];
+        this.letterU[i].set(l?.x ?? 0, l?.y ?? 0, l?.s ?? 1, centers[i] ?? 0);
+      }
+    }
     this.updateCuts(time, pointer, f, r, up, su.uTanFov.value, aspect);
+    su.uTilt.value.set(this.spin, 0);
     su.uMorph.value = this.morph;
-    su.uBlobSpin.value = time * 0.25;
+    // the object turns to face the camera, with a slow sway
+    su.uBlobSpin.value = Math.atan2(this.pose.pos.x, this.pose.pos.z - Z.blob) + Math.sin(time * 0.4) * 0.25;
     for (let i = 0; i < 5; i++) {
       const a = time * (0.35 + i * 0.11) + i * 1.7;
       this.balls[i].set(
@@ -320,8 +511,10 @@ export class World {
     au.uTime.value = time;
     this.now = time;
     const wv = au.uWaves.value as Vector4[];
-    const LIFE = 2.1;
+    const LIFE = 1.25;
     this.waves = this.waves.filter((w) => time - w.t < LIFE);
+    // a small ripple, like a drop on still water: it never crosses the screen
+    const reach = Math.min(200, Math.hypot(this.width, this.height) * 0.13);
     for (let i = 0; i < 3; i++) {
       const w = this.waves[i];
       if (!w) {
@@ -329,9 +522,9 @@ export class World {
         continue;
       }
       const age = time - w.t;
-      // fast at first, then easing out, like a real shock front
-      const radius = (1 - Math.pow(1 - age / LIFE, 1.6)) * Math.hypot(this.width, this.height) * 0.72;
-      wv[i].set(w.x * this.dpr, (this.height - w.y) * this.dpr, radius * this.dpr, Math.pow(1 - age / LIFE, 1.4));
+      const k = age / LIFE;
+      const radius = (1 - Math.pow(1 - k, 2.2)) * reach;
+      wv[i].set(w.x * this.dpr, (this.height - w.y) * this.dpr, radius * this.dpr, Math.pow(1 - k, 2));
     }
     const ch = this.charge;
     (au.uCharge.value as Vector4).set(
@@ -344,9 +537,6 @@ export class World {
     au.uImplode.value = this.fx.implode;
     au.uWarp.value = this.fx.warp;
     au.uSweep.value = this.fx.sweep;
-    au.uWeather.value = this.weather.kind;
-    au.uWeatherA.value.copy(this.weather.a);
-    au.uWeatherB.value.copy(this.weather.b);
     const q = au.uQuiet.value as Vector4[];
     for (let i = 0; i < 4; i++) {
       const rect = this.quiet[i];
@@ -360,7 +550,12 @@ export class World {
         );
       } else q[i].set(0, 0, 0, 0);
     }
+    // every cell once, then the glyphs at full resolution
     this.quad.material = this.asciiMat;
+    this.renderer.setRenderTarget(this.cellsRT);
+    this.renderer.render(this.quadScene, this.quadCam);
+    this.renderer.setRenderTarget(null);
+    this.quad.material = this.glyphMat;
     this.renderer.render(this.quadScene, this.quadCam);
     countGlyphs(this.cols * this.rows);
   }
@@ -420,10 +615,12 @@ export class World {
 
   dispose() {
     this.sceneRT.dispose();
+    this.cellsRT.dispose();
     this.stars.dispose();
     this.atlas?.dispose();
     this.sceneMat.dispose();
     this.asciiMat.dispose();
+    this.glyphMat.dispose();
     this.renderer.dispose();
   }
 }

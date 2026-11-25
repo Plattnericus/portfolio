@@ -19,14 +19,39 @@ export const SECRETS = [
   "gravity",
   "jump",
   "neofetch",
+  "source",
+  "fortune",
+  "console",
+  "lightspeed",
+  "snake",
+  "sculptor",
+  "whirl",
+  "stone",
+  "vim",
+  "coffee",
+  "hello",
+  "wave",
+  "roll",
+  "lights",
+  "zen",
 ] as const;
 export type SecretId = (typeof SECRETS)[number];
+
+/*
+ * How each one is found is written down once, in lib/secret-notes.json, and
+ * `npm run readme` prints it into the hidden part of the README (it also runs
+ * before every build, and `npm run lint` fails if the README is behind).
+ */
+
 
 const STORE = "plattnericus.secrets";
 
 /** opens the ASCII cinema: the camera, the reel or a dropped file */
 export const CINEMA_EVENT = "plattnericus:cinema";
 export type CinemaSource = { kind: "camera" } | { kind: "reel" } | { kind: "file"; file: File };
+
+/** opens the season picker (the Konami code, the shell, five taps in the footer) */
+export const SEASONS_EVENT = "plattnericus:seasons";
 
 /** opens or toggles the shell */
 export const SHELL_EVENT = "plattnericus:shell";

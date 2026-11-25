@@ -7,13 +7,14 @@ import { bindPointer, onFrame, pointer, prefersReducedMotion } from "@/lib/loop"
 import { ScrollTrigger, getLenis, scrollToTarget, startLenis } from "@/lib/motion";
 import { markSecret } from "@/lib/secrets";
 import { projects } from "@/lib/site";
-import { buildKeys, samplePath, type Key } from "@/lib/world/path";
-import { setWorld, worldState } from "@/lib/world/state";
+import { buildKeys, samplePath, wordSpan, type Key } from "@/lib/world/path";
+import { getWorld, setWorld, worldState } from "@/lib/world/state";
+import { CUTS, Z } from "@/lib/world/shaders";
 import { World, type QuietRect } from "@/lib/world/world";
 
 /**
  * The fixed canvas behind the page. Owns the world, feeds it the camera
- * from the scroll path, switches the seasonal weather
+ * from the scroll path
  * and keeps the characters calm behind any [data-quiet] text.
  */
 export default function WorldCanvas() {
@@ -37,10 +38,21 @@ export default function WorldCanvas() {
     const lastCam = new Vector3();
     let lastT = 0;
     let fovKick = 0;
+    // the quiet rects are re-measured on scroll, otherwise every few frames
+    const QUIET_EVERY = 6;
+    let quietY = Number.NaN;
+    let quietAge = 0;
     // a click held still on open space charges a jump to the next section
     let hold: { x: number; y: number; t0: number } | null = null;
     const HOLD_DELAY = 0.2;
     const HOLD_TIME = 0.95;
+    // covering this many screen heights within half a second is lightspeed
+    const LIGHTSPEED = 2.5;
+    const trail: { t: number; y: number }[] = [];
+    let lightAt = -1e9;
+    // only a scroll the visitor is doing counts, not a jump from a link
+    let userAt = -1e9;
+    const touched = () => (userAt = performance.now());
 
     const jump = (x: number, y: number) => {
       if (!world) return;
@@ -58,9 +70,56 @@ export default function WorldCanvas() {
 
     const rebuild = () => {
       if (!world?.text) return;
-      keys = buildKeys(world.text.centers[3] ?? 0, projects.length);
+      keys = buildKeys(world.text.centers[3] ?? 0, projects.length, wordSpan(world.text.centers));
       if (process.env.NODE_ENV !== "production") {
         (window as unknown as { __keys?: Key[] }).__keys = keys;
+      }
+    };
+
+    /*
+     * Circling the name with the cursor winds it up: three full turns
+     * around its middle within a few seconds and it spins once on its axis.
+     */
+    const WHIRL = { turns: 3, within: 6, spin: 1.6 };
+    let around: number | null = null;
+    /** how far the cursor has gone round the name lately: time, angle */
+    let path: { t: number; d: number }[] = [];
+    let spinAt = -1;
+    let spinDir = 1;
+    const whirl = (time: number) => {
+      if (!world) return;
+      if (spinAt >= 0) {
+        const k = Math.min(1, (time - spinAt) / WHIRL.spin);
+        const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        world.spin = e * Math.PI * 2 * spinDir;
+        if (k >= 1) {
+          world.spin = 0;
+          spinAt = -1;
+        }
+        return;
+      }
+      const mid = world.cutting && pointer.moved && !world.hideText && world.pose.pos.z > Z.text + 1 ? world.project(0, 0, Z.text) : null;
+      if (!mid) {
+        around = null;
+        path = [];
+        return;
+      }
+      const a = Math.atan2(pointer.y - mid.y, pointer.x - mid.x);
+      if (around !== null && a !== around) {
+        let d = a - around;
+        if (d > Math.PI) d -= Math.PI * 2;
+        if (d < -Math.PI) d += Math.PI * 2;
+        path.push({ t: time, d });
+      }
+      around = a;
+      // only what was circled within the last few seconds counts
+      path = path.filter((s) => time - s.t < WHIRL.within);
+      const wound = path.reduce((sum, s) => sum + s.d, 0);
+      if (Math.abs(wound) > WHIRL.turns * Math.PI * 2) {
+        spinDir = Math.sign(wound);
+        path = [];
+        spinAt = time;
+        markSecret("whirl");
       }
     };
 
@@ -69,15 +128,25 @@ export default function WorldCanvas() {
     };
 
     (async () => {
-      await fontsReady();
+      // React may mount this twice in development; let the first one go first
+      await Promise.resolve();
       if (disposed) return;
+      // the context and the shaders do not need the fonts: they start at
+      // once and compile while the loader's letters are still at rest
+      let warm: Promise<unknown>;
       try {
         world = new World(canvas, family("mono"));
+        warm = world.warm();
       } catch {
         return;
       }
-      world.build(family("display"));
+      await fontsReady();
+      if (disposed) return;
+      await world.build(family("display"));
+      if (disposed) return;
       world.resize(window.innerWidth, window.innerHeight);
+      await warm;
+      if (disposed) return;
       rebuild();
       ScrollTrigger.addEventListener("refresh", rebuild);
       setWorld(world);
@@ -102,7 +171,7 @@ export default function WorldCanvas() {
           // speed widens the view a little, like a camera pulling away
           fovKick += (Math.min(9, Math.abs(vel) * 0.09) - fovKick) * 0.12;
           world.pose.fov = pose.fov + fovKick;
-          world.pose.roll = pose.roll + px * 0.04;
+          world.pose.roll = pose.roll + px * 0.04 + worldState.roll;
         }
 
         // speed of the camera drives the hyperspace streaks
@@ -113,8 +182,25 @@ export default function WorldCanvas() {
         if (worldState.flying) world.fx.warp += (Math.min(0.25, speed / 160) + boost * 0.9 - world.fx.warp) * 0.15;
         world.rush += (vel + boost * 260 - world.rush) * 0.2;
 
+        // flung hard enough, the page jumps to lightspeed
+        trail.push({ t: time, y });
+        while (trail.length && time - trail[0].t > 0.5) trail.shift();
+        if (!reduced && worldState.flying && trail.length && performance.now() - userAt < 400) {
+          const covered = Math.abs(y - trail[0].y) / window.innerHeight;
+          if (covered > LIGHTSPEED && time - lightAt > 8) {
+            lightAt = time;
+            markSecret("lightspeed");
+            worldState.boost = 1;
+            world.fx.flash = Math.max(world.fx.flash, 0.1);
+          }
+        }
+
         world.morph += (worldState.morph - world.morph) * 0.06;
+        // the cursor cuts through the name; every cut open at once is the
+        // whole name carved up; circled three times, it spins
         world.cutting = worldState.flying && !reduced;
+        if (world.openCuts >= CUTS) markSecret("sculptor");
+        whirl(time);
 
         if (hold) {
           const held = (performance.now() - hold.t0) / 1000;
@@ -137,35 +223,28 @@ export default function WorldCanvas() {
         }
         world.fx.flash *= 0.88;
 
-        // seasonal weather, switched on by the secret
-        const wk = worldState.weather;
-        const kind = wk === "winter" ? 1 : wk === "spring" ? 2 : wk === "summer" ? 3 : wk === "autumn" ? 4 : 0;
-        if (kind !== world.weather.kind) {
-          world.weather.kind = kind;
-          const pal: Record<number, [string, string]> = {
-            1: ["#dfe7f0", "#ffffff"],
-            2: ["#f7b6c8", "#fde2ea"],
-            3: ["#ffd36b", "#d9f27a"],
-            4: ["#e8742a", "#f0b23a"],
-          };
-          const [a, b] = pal[kind] ?? ["#000000", "#000000"];
-          world.weather.a.set(a);
-          world.weather.b.set(b);
-        }
-
-        // keep the characters quiet behind visible copy
-        const rects: QuietRect[] = [];
-        document.querySelectorAll<HTMLElement>("[data-quiet]").forEach((el) => {
-          if (rects.length >= 4) return;
-          const r = el.getBoundingClientRect();
-          if (r.bottom < 0 || r.top > window.innerHeight || r.width === 0) return;
-          if (getComputedStyle(el).visibility === "hidden") return;
-          rects.push({ x: r.left - 28, y: r.top - 28, w: r.width + 56, h: r.height + 56 });
-        });
-        world.quiet = rects;
-
         // nothing to draw under an opaque overlay
         if (worldState.covered > 0) return;
+
+        // keep the characters quiet behind visible copy: measured when the
+        // page moves, and every few frames for copy fading in or out
+        if (document.documentElement.classList.contains("is-zen")) world.quiet = [];
+        else if (y !== quietY || ++quietAge >= QUIET_EVERY) {
+          quietY = y;
+          quietAge = 0;
+          const rects: QuietRect[] = [];
+          document.querySelectorAll<HTMLElement>("[data-quiet]").forEach((el) => {
+            if (rects.length >= 4) return;
+            const r = el.getBoundingClientRect();
+            if (r.bottom < 0 || r.top > window.innerHeight || r.width === 0) return;
+            // faded out or hidden copy does not need the world held back
+            const cs = getComputedStyle(el);
+            if (cs.visibility === "hidden" || Number(cs.opacity) < 0.05) return;
+            rects.push({ x: r.left - 28, y: r.top - 28, w: r.width + 56, h: r.height + 56 });
+          });
+          world.quiet = rects;
+        }
+
         world.render(time, dt, pointer.moved ? { x: pointer.sx, y: pointer.sy } : null);
       });
     })();
@@ -188,12 +267,16 @@ export default function WorldCanvas() {
       hold = null;
     };
     window.addEventListener("pointerdown", onDown);
+    window.addEventListener("wheel", touched, { passive: true });
+    window.addEventListener("touchmove", touched, { passive: true });
     window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
     window.addEventListener("blur", onUp);
     return () => {
       window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("wheel", touched);
+      window.removeEventListener("touchmove", touched);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
@@ -202,6 +285,7 @@ export default function WorldCanvas() {
       offFrame?.();
       window.removeEventListener("resize", onResize);
       ScrollTrigger.removeEventListener("refresh", rebuild);
+      if (world && getWorld() === world) setWorld(null);
       world?.dispose();
     };
   }, []);

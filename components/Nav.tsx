@@ -40,8 +40,15 @@ export default function Nav() {
     let current = "";
     const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-section]"));
     let lastPct = -1;
+    // layout is only read when the page has moved, never on a still frame
+    let lastY = Number.NaN;
+    let lastH = 0;
     offs.push(
       onFrame(() => {
+        const y = getLenis()?.scroll ?? window.scrollY;
+        if (y === lastY && window.innerHeight === lastH) return;
+        lastY = y;
+        lastH = window.innerHeight;
         const mid = window.innerHeight / 2;
         let id = current;
         for (const s of sections) {
@@ -57,9 +64,7 @@ export default function Nav() {
           if (store.get().intro) scramble(chapterRef.current, { text: label, duration: 0.5, spread: 0.8 });
           else chapterRef.current.textContent = label;
         }
-        const l = getLenis();
         const max = document.documentElement.scrollHeight - window.innerHeight;
-        const y = l?.scroll ?? window.scrollY;
         const pct = Math.round((y / Math.max(1, max)) * 100);
         if (pct !== lastPct && pctRef.current) {
           lastPct = pct;

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import AsciiHeading from "@/components/AsciiHeading";
 import { VideoAscii } from "@/lib/ascii/video-ascii";
+import { hideCode, loadCode, noteRead, pickCode, showCode } from "@/lib/code-view";
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
@@ -14,7 +15,8 @@ const fileOf = (clip: string) => clip.split("/").pop() ?? clip;
 /**
  * Every project as one line of a terminal listing, with dotted leaders.
  * On wide screens with a mouse, a monitor beside the list plays the film of
- * the line under the cursor, in characters. It never sits over the text.
+ * the line under the cursor, in characters, and over [ code ] it prints the
+ * real code of that project instead. It never sits over the text.
  */
 export default function Index() {
   const root = useRef<HTMLElement>(null);
@@ -45,6 +47,7 @@ export default function Index() {
     const video = section.querySelector<HTMLVideoElement>(".ix-screen video");
     const num = section.querySelector<HTMLElement>(".ix-cap b");
     const file = section.querySelector<HTMLElement>(".ix-cap span");
+    const code = section.querySelector<HTMLElement>(".ix-screen .code");
     // the monitor is only laid out where there is room and a mouse
     const wanted = () => !!peek && getComputedStyle(peek).display !== "none";
     if (!reduced && screen && canvas && video && peek) {
@@ -52,10 +55,18 @@ export default function Index() {
       let active = 0;
       let visible = false;
       fontsReady().then(() => {
-        film = new VideoAscii(canvas, family("mono"), 5);
+        // fine characters: the monitor is small, the detail has to come from the cells
+        film = new VideoAscii(canvas, family("mono"), 5.5);
+        film.frame = true;
         film.resize(screen.offsetWidth, screen.offsetHeight);
       });
       const ro = new ResizeObserver(() => film?.resize(screen.offsetWidth, screen.offsetHeight));
+      // clips open on a splash screen: start a third of the way in, where the site is
+      const skipIntro = () => {
+        if (video.duration && video.currentTime < 0.5) video.currentTime = video.duration * 0.33;
+      };
+      video.addEventListener("loadedmetadata", skipIntro);
+      offs.push(() => video.removeEventListener("loadedmetadata", skipIntro));
       ro.observe(screen);
       offs.push(() => ro.disconnect());
 
@@ -64,6 +75,12 @@ export default function Index() {
         if (!video.src) video.src = projects[active].clip;
         video.play().catch(() => undefined);
       };
+      let caption = "";
+      const label = (text: string) => {
+        if (!file || text === caption) return;
+        caption = text;
+        scramble(file, { duration: 0.4, text });
+      };
       const show = (i: number) => {
         if (!wanted()) return;
         peek.classList.add("is-hot");
@@ -71,11 +88,10 @@ export default function Index() {
         active = i;
         video.src = projects[i].clip;
         play();
-        film?.cut();
+        // the next site arrives coarse and sharpens: it shows at once, never as static
+        film?.cut("resolve");
         if (num) num.textContent = String(i + 1).padStart(2, "0");
-        if (file) {
-          scramble(file, { duration: 0.4, text: fileOf(projects[i].clip) });
-        }
+        label(fileOf(projects[i].clip));
       };
       rows.forEach((row, i) => {
         const enter = () => {
@@ -85,6 +101,36 @@ export default function Index() {
         };
         row.addEventListener("pointerenter", enter);
         offs.push(() => row.removeEventListener("pointerenter", enter));
+        // over the source link the monitor prints the code itself, a
+        // different excerpt every time
+        const src = row.querySelector<HTMLElement>("[data-code]");
+        if (!src || !code) return;
+        let over = false;
+        const on = async () => {
+          over = true;
+          show(i);
+          if (!wanted()) return;
+          const snip = await pickCode(projects[i].slug);
+          if (!snip || !over) return;
+          showCode(code, snip);
+          label(`${fileOf(snip.path)}:${snip.start}`);
+          noteRead(projects[i].slug);
+        };
+        const off = () => {
+          over = false;
+          hideCode(code);
+          label(fileOf(projects[i].clip));
+        };
+        src.addEventListener("pointerenter", on);
+        src.addEventListener("focus", on);
+        src.addEventListener("pointerleave", off);
+        src.addEventListener("blur", off);
+        offs.push(() => {
+          src.removeEventListener("pointerenter", on);
+          src.removeEventListener("focus", on);
+          src.removeEventListener("pointerleave", off);
+          src.removeEventListener("blur", off);
+        });
       });
       const list = section.querySelector<HTMLElement>(".ix-list");
       const cool = () => peek.classList.remove("is-hot");
@@ -94,6 +140,7 @@ export default function Index() {
       offs.push(
         watchVisible(section, (v) => {
           visible = v;
+          if (v) loadCode();
           if (v) play();
           else video.pause();
         }),
@@ -126,7 +173,14 @@ export default function Index() {
                     <span data-label>live</span>
                   </a>
                 ) : null}
-                <a className="tl" href={p.source} target="_blank" rel="noreferrer" data-scramble>
+                <a
+                  className="tl"
+                  href={p.source}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-scramble
+                  data-code=""
+                >
                   <span data-label>code</span>
                 </a>
               </span>
@@ -137,6 +191,7 @@ export default function Index() {
           <div className="ix-screen">
             <canvas />
             <video muted loop playsInline preload="none" tabIndex={-1} />
+            <div className="code" />
           </div>
           <figcaption className="ix-cap muted">
             <b>01</b> <span>{fileOf(projects[0].clip)}</span>

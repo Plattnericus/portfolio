@@ -170,6 +170,14 @@ export class Starfield {
     renderer.setRenderTarget(null);
   }
 
+  /** compiles both shaders for the target they draw into, without waiting on them */
+  warm(renderer: WebGLRenderer) {
+    renderer.setRenderTarget(this.target);
+    const done = renderer.compileAsync(this.scene, this.camera);
+    renderer.setRenderTarget(null);
+    return done;
+  }
+
   dispose() {
     this.target.dispose();
     this.dots.geometry.dispose();

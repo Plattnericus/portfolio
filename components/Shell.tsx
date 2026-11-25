@@ -3,17 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getLenis, scrollToTarget } from "@/lib/motion";
-import { SECRETS, SHELL_EVENT, SPECIMEN_EVENT, foundSecrets, markSecret, openCinema } from "@/lib/secrets";
-import { SEASONS, seasonOf } from "@/lib/seasons";
-import { projects, site, skills } from "@/lib/site";
-import { SECRET_EVENT } from "@/components/Secret";
+import { SECRETS, SHELL_EVENT, SPECIMEN_EVENT, foundSecrets, markSecret, openCinema, SEASONS_EVENT } from "@/lib/secrets";
+import { SEASONS, WEATHER, chooseSeason, type Season } from "@/lib/seasons";
+import { setMuted } from "@/lib/sound";
+import { projects, quotes, site, skills } from "@/lib/site";
+import { Snake } from "@/lib/snake";
+import { N_MARK } from "@/lib/ascii/glyphs";
 import { glyphTotal } from "@/lib/ascii/stats";
 import { worldState } from "@/lib/world/state";
 
 type Line = { text: string; tone?: "dim" | "accent" | "input"; lead?: string };
 
 /** the N of Nexor Grid, two characters per module */
-const LOGO = ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"].map((r) =>
+const LOGO = N_MARK.map((r) =>
   r.replace(/#/g, "@@").replace(/\./g, "  "),
 );
 
@@ -73,6 +75,7 @@ const PUBLIC: [string, string][] = [
   ["mail", "write me"],
   ["warp", "full speed"],
   ["secrets", "how many you found"],
+  ["mute", "no chime for a found secret (unmute)"],
   ["clear", "clear the screen"],
   ["exit", "close the shell (esc)"],
 ];
@@ -103,6 +106,10 @@ export default function Shell() {
   const inputRef = useRef<HTMLInputElement>(null);
   const outRef = useRef<HTMLDivElement>(null);
   const greeted = useRef(false);
+  const [game, setGame] = useState(false);
+  // inside the editor every line is an ex command until it is left
+  const [vim, setVim] = useState(false);
+  const gameRef = useRef<HTMLPreElement>(null);
 
   const print = useCallback((...add: Line[]) => setLines((l) => [...l, ...add].slice(-200)), []);
 
@@ -147,10 +154,54 @@ export default function Shell() {
   useEffect(() => {
     const out = outRef.current;
     if (out) out.scrollTop = out.scrollHeight;
-  }, [lines]);
+  }, [lines, game]);
+
+  // snake: the board takes the keys until q or esc
+  useEffect(() => {
+    const el = gameRef.current;
+    if (!game || !el) return;
+    const narrow = window.innerWidth < 640;
+    const snake = new Snake(el, narrow ? 22 : 36, narrow ? 12 : 14, (score) => {
+      if (score >= 5) markSecret("snake");
+    });
+    const out = outRef.current;
+    if (out) out.scrollTop = out.scrollHeight;
+    const quit = () => {
+      const score = snake.score;
+      snake.destroy();
+      setGame(false);
+      setLines((l) => [...l, { text: `snake: ${score} eaten.`, tone: "dim" as const }]);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      // the shell's own key closes it as usual, the game ends with it
+      if (e.key === "`") return quit();
+      if (e.key === "q" || e.key === "Escape") quit();
+      else if (!snake.key(e.key)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    inputRef.current?.blur();
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKey, { capture: true });
+      snake.destroy();
+    };
+  }, [game]);
 
   const run = (raw: string) => {
     const cmdline = raw.trim();
+    if (vim) {
+      print({ text: `:${cmdline.replace(/^:/, "")}`, tone: "input" });
+      if (/^:?(q!?|wq!?|x|qa!?)$/.test(cmdline)) {
+        setVim(false);
+        markSecret("vim");
+        print({ text: "you got out. most people don't.", tone: "accent" });
+      } else if (cmdline) {
+        print({ text: `E492: Not an editor command: ${cmdline.replace(/^:/, "")}`, tone: "dim" });
+      }
+      return;
+    }
     print({ text: `${PROMPT} ${cmdline}`, tone: "input" });
     if (!cmdline) return;
     history.current = [cmdline, ...history.current.filter((h) => h !== cmdline)].slice(0, 50);
@@ -238,15 +289,45 @@ export default function Shell() {
     } else if (c === "sudo" || (c === "rm" && /-\w*r\w*f|-\w*f\w*r/.test(arg))) {
       markSecret("sudo");
       print({ text: c === "sudo" ? `${site.name.toLowerCase()} is not in the sudoers file. this incident will be reported.` : "not today.", tone: "accent" });
+    } else if (c === "mute" || c === "unmute") {
+      setMuted(c === "mute");
+      print({ text: c === "mute" ? "quiet now, until you reload." : "the chime is back.", tone: "dim" });
+    } else if ((c === "season" || c === "seasons") && arg === "off") {
+      chooseSeason(null);
+      print({ text: "the weather is off.", tone: "dim" });
+    } else if (c === "season" || c === "seasons") {
+      toggle(false);
+      window.dispatchEvent(new Event(SEASONS_EVENT));
     } else if ((SEASONS as string[]).includes(c)) {
-      const now = seasonOf().season;
-      if (c === now) {
-        toggle(false);
-        window.dispatchEvent(new Event(SECRET_EVENT));
-      } else print({ text: `not yet. it is ${now}.`, tone: "dim" });
+      chooseSeason(c as Season);
+      print({ text: `${WEATHER[c as Season].line} on every page, until you reload.`, tone: "accent" });
     } else if (c === "neofetch" || c === "fastfetch") {
       markSecret("neofetch");
       print(...neofetch());
+    } else if (c === "fortune") {
+      markSecret("fortune");
+      const q = quotes[Math.floor(Math.random() * quotes.length)];
+      print({ text: `  "${q.text}"` }, { text: `      -- ${q.by}${q.year ? `, ${q.year}` : ""}`, tone: "dim" });
+    } else if (c === "snake") {
+      print({ text: "snake. eat five.", tone: "dim" });
+      setGame(true);
+    } else if (c === "vim" || c === "vi" || c === "nvim") {
+      setVim(true);
+      print(
+        ...Array.from({ length: 4 }, () => ({ text: "~", tone: "dim" as const })),
+        { text: `"${arg || "untitled"}" [New]`, tone: "dim" },
+      );
+    } else if (c === "coffee" || ((c === "brew" || c === "make") && /coffee/.test(arg))) {
+      markSecret("coffee");
+      print(
+        { text: "      ( (" },
+        { text: "       ) )" },
+        { text: "    ........" },
+        { text: "    |      |]" },
+        { text: "    \\      /" },
+        { text: "     `----'" },
+        { text: "  brewed. back to work.", tone: "dim" },
+      );
     } else if (c === "ping") {
       print({ text: `PONG from ${site.domain}: icmp_seq=1 ttl=64 time=0.${(Date.now() % 90) + 10} ms` });
     } else {
@@ -280,9 +361,11 @@ export default function Shell() {
             {l.text}
           </p>
         ))}
+        {game ? <pre ref={gameRef} className="sh-game" aria-label="snake" /> : null}
       </div>
       <form
         className="sh-in"
+        hidden={game}
         onSubmit={(e) => {
           e.preventDefault();
           run(value);
@@ -290,7 +373,7 @@ export default function Shell() {
         }}
       >
         <label htmlFor="sh-input" className="sh-prompt">
-          {PROMPT}
+          {vim ? ":" : PROMPT}
         </label>
         <input
           id="sh-input"

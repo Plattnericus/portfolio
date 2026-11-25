@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AsciiTitle } from "@/lib/ascii/ascii-title";
 import { VideoAscii } from "@/lib/ascii/video-ascii";
+import { hideCode, loadCode, noteRead, pickCode, showCode } from "@/lib/code-view";
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
@@ -15,7 +16,8 @@ const BAR = 32;
 /**
  * Pinned. Every project plays as a large colour ASCII film; scrolling cuts
  * to the next one through a burst of character static while the camera keeps
- * flying through the stars behind.
+ * flying through the stars behind. Over the source link, the screen prints
+ * the project's real code instead.
  */
 export default function Work() {
   const root = useRef<HTMLElement>(null);
@@ -39,6 +41,8 @@ export default function Work() {
     const played = time?.querySelector<HTMLElement>("b");
     const rest = time?.querySelector<HTMLElement>("i");
     const file = section.querySelector<HTMLElement>(".wk-file");
+    const code = section.querySelector<HTMLElement>(".wk-screen .code");
+    let reading = false;
     let lastBar = -1;
     const offs: (() => void)[] = [bindHoverScramble(section)];
     let title: AsciiTitle | null = null;
@@ -65,6 +69,8 @@ export default function Work() {
       if (!first && !reduced) film?.cut();
       if (!first && !reduced) pulse(0.3, 0.5, 1);
       if (num) num.textContent = String(i + 1).padStart(2, "0");
+      if (reading && code) hideCode(code);
+      reading = false;
       if (file) file.textContent = p.clip.split("/").pop() ?? "";
       lastBar = -1;
       title?.set(p.name);
@@ -82,6 +88,39 @@ export default function Work() {
       if (source) source.href = p.source;
     };
 
+    // the source link: the screen prints the code of the project on show
+    let over = false;
+    const read = async () => {
+      over = true;
+      const p = projects[active];
+      if (!p || !code) return;
+      const snip = await pickCode(p.slug);
+      if (!snip || !over || projects[active] !== p) return;
+      reading = true;
+      showCode(code, snip);
+      if (file) file.textContent = `${snip.path.split("/").pop()}:${snip.start}`;
+      noteRead(p.slug);
+    };
+    const unread = () => {
+      over = false;
+      if (!reading || !code) return;
+      reading = false;
+      hideCode(code);
+      if (file) file.textContent = projects[active]?.clip.split("/").pop() ?? "";
+    };
+    if (source && !reduced) {
+      source.addEventListener("pointerenter", read);
+      source.addEventListener("focus", read);
+      source.addEventListener("pointerleave", unread);
+      source.addEventListener("blur", unread);
+      offs.push(() => {
+        source.removeEventListener("pointerenter", read);
+        source.removeEventListener("focus", read);
+        source.removeEventListener("pointerleave", unread);
+        source.removeEventListener("blur", unread);
+      });
+    }
+
     const size = () => {
       if (!film || !screen) return;
       const w = screen.clientWidth;
@@ -95,11 +134,12 @@ export default function Work() {
       title = new AsciiTitle(nameHost, {
         fontFamily: family("mono"),
         displayFamily: family("display"),
-        knockout: "#08080a",
+        knockout: site.colors.bg,
         label: false,
         reveal: "vary",
       });
       film = new VideoAscii(canvas, family("mono"), 8);
+      film.frame = true;
       size();
       const ro = new ResizeObserver(size);
       if (screen) ro.observe(screen);
@@ -139,6 +179,7 @@ export default function Work() {
         section,
         (v) => {
           visible = v;
+          if (v) loadCode();
           const cur = videos[active];
           if (!cur) return;
           if (v) cur.play().catch(() => undefined);
@@ -180,6 +221,7 @@ export default function Work() {
         <div className="wk-film" aria-hidden="true">
           <div className="wk-screen">
             <canvas />
+            <div className="code" />
           </div>
           <p className="wk-meta muted">
             <span className="wk-file">{first.clip.split("/").pop()}</span>
@@ -208,7 +250,7 @@ export default function Work() {
               <span data-label>{first.live?.label}</span>
               <span className="arrow">↗</span>
             </a>
-            <a className="tl wk-source" href={first.source} target="_blank" rel="noreferrer" data-scramble>
+            <a className="tl wk-source" href={first.source} target="_blank" rel="noreferrer" data-scramble data-code="">
               <span data-label>source</span>
               <span className="arrow">↗</span>
             </a>

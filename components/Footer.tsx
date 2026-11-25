@@ -1,30 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
+import Quote from "@/components/Quote";
 import { AsciiTitle } from "@/lib/ascii/ascii-title";
-import { glyphTotal } from "@/lib/ascii/stats";
+import { Water } from "@/lib/ascii/water";
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, pointer, prefersReducedMotion, watchVisible } from "@/lib/loop";
 import { scrollToTarget } from "@/lib/motion";
 import { bindHoverScramble } from "@/lib/scramble";
-import { seasonOf } from "@/lib/seasons";
-import { FOUND_EVENT, SECRETS, SHELL_EVENT, foundSecrets, markSecret } from "@/lib/secrets";
+import { SEASONS_EVENT, SHELL_EVENT, markSecret } from "@/lib/secrets";
 import { site } from "@/lib/site";
-import { SECRET_EVENT } from "@/components/Secret";
 
 const MARK = ["#3a2a22", "#6b4a3a", "#a8735a", "#e6a27f", "#ffd5bd", "#fff4ec"];
 
-function clock(ms: number) {
-  const s = Math.floor(ms / 1000);
-  const h = String(Math.floor(s / 3600)).padStart(2, "0");
-  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  return `${h}:${m}:${String(s % 60).padStart(2, "0")}`;
-}
-
 /**
- * The end of the page: where to find me, a live status line of this very
- * tab, and the name once more, as large as the screen allows, lit by the
- * cursor.
+ * The end of the page: a line drawn at random, where to find me as a file
+ * tree, and the name once more, as large as the screen allows, lit by the
+ * cursor and mirrored in water underneath that really ripples.
  */
 export default function Footer() {
   const root = useRef<HTMLElement>(null);
@@ -35,29 +28,16 @@ export default function Footer() {
     if (!section) return;
     const reduced = prefersReducedMotion();
     const host = section.querySelector<HTMLElement>(".ft-mark");
-    const up = section.querySelector<HTMLElement>("[data-uptime]");
-    const cells = section.querySelector<HTMLElement>("[data-cells]");
-    const fpsEl = section.querySelector<HTMLElement>("[data-fps]");
-    const found = section.querySelector<HTMLElement>("[data-found]");
-    const season = section.querySelector<HTMLElement>("[data-season]");
+    // the box sets the size; the canvas inside follows it
+    const water = section.querySelector<HTMLElement>(".ft-water");
+    const waterCanvas = section.querySelector<HTMLCanvasElement>(".ft-water canvas");
     const offs: (() => void)[] = [bindHoverScramble(section)];
-    const born = performance.now();
     let mark: AsciiTitle | null = null;
     let visible = false;
     let alive = true;
-    let fps = 0;
     let lastFrame = 0;
-    let lastText = 0;
     let lastPx = -1;
     let lastPy = -1;
-
-    if (season) season.textContent = seasonOf().season;
-    const showFound = () => {
-      if (found) found.textContent = `${foundSecrets().length}/${SECRETS.length}`;
-    };
-    showFound();
-    window.addEventListener(FOUND_EVENT, showFound);
-    offs.push(() => window.removeEventListener(FOUND_EVENT, showFound));
 
     offs.push(watchVisible(section, (v) => (visible = v), "0px"));
 
@@ -86,18 +66,71 @@ export default function Footer() {
       );
     });
 
+    // the water: real ripples from the cursor, a drop now and then, and a
+    // stone skipped across it if you swipe fast enough
+    let pool: Water | null = null;
+    let nextDrop = 0;
+    let trail: { x: number; y: number; t: number }[] = [];
+    let skipping = false;
+    fontsReady().then(() => {
+      if (!alive || !water || !waterCanvas) return;
+      pool = new Water(waterCanvas, family("mono"));
+      pool.resize(water.clientWidth, water.clientHeight);
+    });
+    const ro = new ResizeObserver(() => water && pool?.resize(water.clientWidth, water.clientHeight));
+    if (water) ro.observe(water);
+    offs.push(() => ro.disconnect());
+
+    const local = (e: PointerEvent) => {
+      const b = water?.getBoundingClientRect();
+      return b ? { x: e.clientX - b.left, y: e.clientY - b.top, w: b.width } : null;
+    };
+    const skip = (from: number, dir: number, y: number, w: number) => {
+      // five bounces, each shorter and softer, then it sinks
+      skipping = true;
+      let x = from;
+      let hop = w * 0.11;
+      for (let k = 0; k < 6; k++) {
+        const at = x;
+        const strength = 1.6 - k * 0.25;
+        window.setTimeout(() => pool?.poke(at, y, strength, k === 5 ? 2 : 1), k * 140);
+        x += dir * hop;
+        hop *= 0.72;
+      }
+      window.setTimeout(() => (skipping = false), 1200);
+      markSecret("stone");
+    };
+    const onMove = (e: PointerEvent) => {
+      const p = local(e);
+      if (!p || !pool || reduced) return;
+      const now = performance.now();
+      const last = trail[trail.length - 1];
+      const speed = last ? Math.hypot(p.x - last.x, p.y - last.y) / Math.max(1, now - last.t) : 0;
+      pool.poke(p.x, p.y, Math.min(0.9, 0.15 + speed * 0.25), 1);
+      trail = [...trail.filter((q) => now - q.t < 450), { ...p, t: now }];
+      // a fast flat swipe over a good stretch of the water is a skipped stone
+      const first = trail[0];
+      const dx = p.x - first.x;
+      if (!skipping && trail.length > 3 && Math.abs(dx) > p.w * 0.35 && Math.abs(p.y - first.y) < Math.abs(dx) * 0.25) {
+        trail = [];
+        skip(p.x, Math.sign(dx), p.y, p.w);
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      const p = local(e);
+      if (p && pool && !reduced) pool.poke(p.x, p.y, 2.2, 2);
+    };
+    water?.addEventListener("pointermove", onMove);
+    water?.addEventListener("pointerdown", onDown);
+    offs.push(() => {
+      water?.removeEventListener("pointermove", onMove);
+      water?.removeEventListener("pointerdown", onDown);
+    });
+
     offs.push(
-      onFrame((_t, dms) => {
+      onFrame((t) => {
         if (!visible) return;
-        // the status line, a few times a second
-        if (dms > 0) fps += (1000 / dms - fps) * 0.05;
         const now = performance.now();
-        if (now - lastText > 250) {
-          lastText = now;
-          if (up) up.textContent = clock(now - born);
-          if (cells) cells.textContent = Math.round(glyphTotal()).toLocaleString("en-US");
-          if (fpsEl) fpsEl.textContent = String(Math.round(fps));
-        }
         // the name is lit from wherever the cursor is
         if (mark && host && pointer.moved && !reduced && now - lastFrame > 16) {
           const r = host.getBoundingClientRect();
@@ -110,14 +143,29 @@ export default function Footer() {
             mark.setLight({ x: px, y: py });
           }
         }
+        if (!pool || !water) return;
+        // now and then a drop falls somewhere
+        if (!reduced && now > nextDrop) {
+          nextDrop = now + 1800 + Math.random() * 2600;
+          pool.poke(Math.random() * water.clientWidth, Math.random() * water.clientHeight, 0.9 + Math.random() * 0.6, 1);
+        }
+        pool.render(mark?.surface ?? null, t);
       }),
     );
 
-    // a click and the letters fall down; another and they stand back up
+    // a click and the letters fall down, into the water; another and they
+    // stand back up
     const onClick = () => {
       if (!mark || reduced) return;
-      if (!mark.collapsed) markSecret("gravity");
+      const falling = !mark.collapsed;
+      if (falling) markSecret("gravity");
       mark.toggleCollapse();
+      if (falling && water) {
+        const w = water.clientWidth;
+        for (let k = 0; k < 7; k++) {
+          window.setTimeout(() => pool?.poke(w * (0.08 + k * 0.14), 4, 2.4, 2), 650 + k * 60);
+        }
+      }
     };
     host?.addEventListener("click", onClick);
     offs.push(() => host?.removeEventListener("click", onClick));
@@ -129,83 +177,77 @@ export default function Footer() {
     };
   }, []);
 
+  const tap = () => {
+    // five taps in a row: the way in for phones without a keyboard
+    const now = performance.now();
+    taps.current = [...taps.current.filter((t) => now - t < 2500), now];
+    if (taps.current.length >= 5) {
+      taps.current = [];
+      window.dispatchEvent(new Event(SEASONS_EVENT));
+    }
+  };
+
   return (
     <footer ref={root} id="footer" className="ft" data-section="footer">
-      <div className="ft-cols" data-quiet>
-        <div className="ft-col">
-          <p className="ft-path">~/contact</p>
+      <Quote mode="sort" section="footer" scrub={false} className="qt-foot" />
+
+      <nav className="ft-tree" aria-label="elsewhere" data-quiet>
+        <span className="ft-root">~/</span>
+        <span className="ft-br">|--</span>
+        <span className="ft-dir">contact/</span>
+        <span className="ft-items">
           <a href={`mailto:${site.email}`} className="tl" data-scramble>
             <span data-label>{site.email}</span>
           </a>
-        </div>
-        <div className="ft-col">
-          <p className="ft-path">~/elsewhere</p>
-          <a className="tl" href={site.github} target="_blank" rel="noreferrer" data-scramble>
+        </span>
+        <span className="ft-br">|--</span>
+        <span className="ft-dir">elsewhere/</span>
+        <span className="ft-items">
+          <a className="tl" href={site.github} target="_blank" rel="me noreferrer" data-scramble>
             <span data-label>github</span>
             <span className="arrow">↗</span>
           </a>
-          <a className="tl" href={site.modrinth} target="_blank" rel="noreferrer" data-scramble>
+          <a className="tl" href={site.modrinth} target="_blank" rel="me noreferrer" data-scramble>
             <span data-label>modrinth</span>
             <span className="arrow">↗</span>
           </a>
-        </div>
-        <div className="ft-col">
-          <p className="ft-path">~/site</p>
-          <a className="tl" href="/privacy" data-scramble>
+        </span>
+        <span className="ft-br">|--</span>
+        <span className="ft-dir">site/</span>
+        <span className="ft-items">
+          <Link className="tl" href="/privacy" data-scramble>
             <span data-label>privacy</span>
-          </a>
+          </Link>
           <a className="tl" href="/llms.txt" data-scramble>
             <span data-label>llms.txt</span>
           </a>
           <a className="tl" href="/.well-known/security.txt" data-scramble>
             <span data-label>security.txt</span>
           </a>
-        </div>
-        <div className="ft-col">
-          <p className="ft-path">~/shell</p>
+        </span>
+        <span className="ft-br">`--</span>
+        <span className="ft-dir">shell/</span>
+        <span className="ft-items">
           <button type="button" className="tl ft-shell" onClick={() => window.dispatchEvent(new Event(SHELL_EVENT))}>
             <span>press ` </span>
           </button>
-          <button
-            type="button"
-            className="ft-hint"
-            onClick={() => {
-              // five taps in a row: the way in for phones without a keyboard
-              const now = performance.now();
-              taps.current = [...taps.current.filter((t) => now - t < 2500), now];
-              if (taps.current.length >= 5) {
-                taps.current = [];
-                window.dispatchEvent(new Event(SECRET_EVENT));
-              }
-            }}
-          >
-            something unlocks here every season
+          <button type="button" className="ft-hint" onClick={tap}>
+            the weather here changes with the seasons
           </button>
+        </span>
+      </nav>
+
+      <div className="ft-pool" aria-hidden="true">
+        <div className="ft-mark" />
+        <div className="ft-water">
+          <canvas />
         </div>
       </div>
 
-      <p className="ft-status muted" aria-hidden="true">
-        <span>
-          up <b data-uptime>00:00:00</b>
-        </span>
-        <span>
-          <b data-cells>0</b> cells drawn
-        </span>
-        <span>
-          <b data-fps>0</b> fps
-        </span>
-        <span>
-          season <b data-season>-</b>
-        </span>
-        <span>
-          secrets <b data-found>0/0</b>
-        </span>
-      </p>
-
-      <div className="ft-mark" aria-hidden="true" />
-
       <div className="ft-base">
-        <span className="muted">© {new Date().getFullYear()} {site.name.toLowerCase()} / {site.handle.toLowerCase()}</span>
+        <span className="muted">
+          © {new Date().getFullYear()} {site.name.toLowerCase()} / {site.handle.toLowerCase()}
+        </span>
         <a
           href="#hero"
           className="tl"

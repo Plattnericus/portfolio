@@ -1,12 +1,16 @@
 import { GlyphCanvas } from "./glyph-canvas";
-import { NOISE, RAMP } from "./glyphs";
+import { NOISE } from "./glyphs";
 import { Shape } from "./shape";
 import { isCoarse, onFrame, prefersReducedMotion } from "../loop";
+import { C } from "../palette";
+import { REST_PIXEL, WEATHER, type Settle } from "../seasons";
+import { store } from "../store";
 
 /*
  * Headlines as ASCII art. The text is set in the display face, wrapped to
  * the box, rasterised and printed as characters: outlines become - / | \ _,
- * the body is lit from the top left through a bevel. New text sweeps in
+ * the body is always a dense character (* # % @), so every stroke reads as
+ * solid, and is lit from the top left through a bevel in its colour. New text sweeps in
  * from the left, decoding out of noise; changes in quick succession (fast
  * scrolling) are drawn at once so nothing is ever left half-way.
  * With a mouse, a magnifier follows the cursor over the letters: the cells
@@ -29,6 +33,8 @@ export type TitleOptions = {
   label?: boolean;
   /** how new text arrives; "vary" picks a different one on every change */
   reveal?: RevealMode | "vary";
+  /** called every frame of a reveal with its progress, and with 1 at the end */
+  onReveal?: (k: number) => void;
 };
 
 /**
@@ -39,8 +45,10 @@ export type TitleOptions = {
  * dissolve  cells pop in at random, through noise
  * outline   the outline draws itself around, then the body fills
  * radial    grows out from the middle
+ * print     a print head lays it down row by row from the bottom, over a
+ *           dotted plan of the outline; fresh cells glow and cool down
  */
-export type RevealMode = "sweep" | "scan" | "rain" | "assemble" | "dissolve" | "outline" | "radial";
+export type RevealMode = "sweep" | "scan" | "rain" | "assemble" | "dissolve" | "outline" | "radial" | "print";
 
 const MODES: RevealMode[] = ["sweep", "scan", "rain", "assemble", "dissolve", "outline", "radial"];
 
@@ -52,6 +60,7 @@ const DURATION: Record<RevealMode, number> = {
   dissolve: 850,
   outline: 1350,
   radial: 950,
+  print: 950,
 };
 
 /** caps-only face: line box and where the caps sit in it, in font sizes */
@@ -59,6 +68,23 @@ const LINE = 0.92;
 const CAP = 0.744;
 
 const DEFAULT_PALETTE = ["#4a453f", "#7c766d", "#b3ada3", "#d9d3c9", "#efeae2", "#ffffff"];
+
+/** where the top of a letter's glyph sits in its cell, as a share of the cell's height */
+const SETTLE_TOP = 0.16;
+
+/** character rows per line of type, and the smallest cell (font size, css px) for it */
+const ROWS_PER_LINE = 14;
+const MIN_CELL = 4;
+/*
+ * The inside of a letter, darkest to brightest. Only dense characters: the
+ * light ones (. - = +) look like outlines and break a stroke into stripes.
+ * BODY_FLOOR is how dark the bevel's shaded side gets.
+ */
+const BODY = "*#%@";
+const BODY_FLOOR = 0.4;
+const bodyLum = (diff: number) => BODY_FLOOR + diff * (1 - BODY_FLOOR) * 1.25;
+const bodyCode = (lum: number) =>
+  BODY.charCodeAt(Math.round(Math.min(1, Math.max(0, (lum - BODY_FLOOR) / (1 - BODY_FLOOR))) * (BODY.length - 1)));
 const RAPID_MS = 320;
 
 export class AsciiTitle {
@@ -67,7 +93,7 @@ export class AsciiTitle {
   private label: HTMLElement;
   private gc: GlyphCanvas;
   private shape = new Shape();
-  private opts: Required<Omit<TitleOptions, "knockout">> & { knockout?: string };
+  private opts: Required<Omit<TitleOptions, "knockout" | "onReveal">> & Pick<TitleOptions, "knockout" | "onReveal">;
   /** false until the first set(); nothing is drawn before that */
   shown = false;
   private text = "";
@@ -89,6 +115,9 @@ export class AsciiTitle {
   private off: (() => void) | null = null;
   private lastSet = 0;
   private ro: ResizeObserver;
+  /** what the season has left lying on the letters, if anything */
+  private settle: Settle | null = null;
+  private offStore: () => void;
   private w = 0;
   private h = 0;
   /** which cells are lit, by index */
@@ -97,6 +126,9 @@ export class AsciiTitle {
   private lens = { tx: 0, ty: 0, x: 0, y: 0, k: 0, on: false, r: 90 };
   private lensOff: (() => void) | null = null;
   private onMove = (e: PointerEvent) => this.track(e);
+  /** print reveal: when each lit cell is laid down, 0..1, and where the head is */
+  private printAt = new Float32Array(0);
+  private printPath = new Int32Array(0);
 
   constructor(host: HTMLElement, opts: TitleOptions) {
     this.host = host;
@@ -112,6 +144,7 @@ export class AsciiTitle {
       label: opts.label ?? true,
       reveal: opts.reveal ?? "sweep",
       knockout: opts.knockout,
+      onReveal: opts.onReveal,
     };
     // the canvas fills the host, which has to be its containing block
     host.classList.add("at");
@@ -127,7 +160,16 @@ export class AsciiTitle {
       fontSize: 8,
       lineHeight: 1.12,
       weight: 700,
-      palette: this.opts.palette,
+      // one more colour on top of the palette: a warm one, for fresh cells
+      palette: [...this.opts.palette, C.terra],
+    });
+    // what the season leaves on the letters, now and whenever it changes
+    const weather = store.get().weather;
+    this.settle = weather ? WEATHER[weather].settle : null;
+    this.offStore = store.subscribe((s, prev) => {
+      if (s.weather === prev.weather) return;
+      this.settle = s.weather ? WEATHER[s.weather].settle : null;
+      if (this.shown && !this.off) this.draw(0);
     });
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(host);
@@ -238,8 +280,8 @@ export class AsciiTitle {
     if (!w || !h) return;
     const text = this.opts.uppercase ? this.text.toUpperCase() : this.text;
     const { size, lines } = this.fit(text, w * 0.995, h);
-    // about eleven character rows per line of type, within limits
-    const cell = Math.max(4.5, Math.min(this.opts.maxCell, (size * 0.98) / 11 / 1.12));
+    // ROWS_PER_LINE character rows per line of type, within limits
+    const cell = Math.max(MIN_CELL, Math.min(this.opts.maxCell, (size * 0.98) / ROWS_PER_LINE / 1.12));
     this.gc.setFontSize(cell);
     this.gc.resize(w, h);
     const fam = this.opts.displayFamily;
@@ -295,6 +337,19 @@ export class AsciiTitle {
     const lit = new Uint8Array(n);
     for (let k = 0; k < count; k++) lit[cells[k]] = 1;
     this.lit = lit;
+    // the print head runs along each row from the bottom up, turning at the
+    // end of every row like a real one
+    const path: number[] = [];
+    for (let r = rowsN - 1; r >= 0; r--) {
+      const flip = (rowsN - 1 - r) % 2 === 1;
+      for (let j = 0; j < cols; j++) {
+        const c = flip ? cols - 1 - j : j;
+        if (lit[r * cols + c]) path.push(r * cols + c);
+      }
+    }
+    this.printPath = Int32Array.from(path);
+    this.printAt = new Float32Array(n);
+    path.forEach((i, k) => (this.printAt[i] = k / Math.max(1, path.length)));
     this.lens.r = Math.max(70, Math.min(150, Math.min(w, h * 1.6) * 0.42));
     for (let c = 0; c < cols; c++) {
       let floor = rowsN - 1;
@@ -314,10 +369,56 @@ export class AsciiTitle {
     if (this.shown && this.reveal >= 1 && !this.off) this.draw(0);
   }
 
+  /** the canvas itself, for effects that copy what it shows */
+  get surface() {
+    return this.canvas;
+  }
+
   setPalette(palette: string[]) {
     this.opts.palette = palette;
-    this.gc.setPalette(palette);
+    this.gc.setPalette([...palette, C.terra]);
     if (this.shown && !this.off) this.draw(0);
+  }
+
+  /*
+   * What the season leaves on the letters, in small pixels: on the top of
+   * every column of a letter a shaded pixel row on the edge and white ones
+   * above, lumpy along the line; where it covers less (blossom, leaves),
+   * single pixels. Each cell decides by a fixed hash, so nothing flickers
+   * when the headline is drawn again.
+   */
+  private drawSettle(skip: (c: number, r: number) => boolean) {
+    const s = this.settle;
+    const { gc, lit } = this;
+    const { cells, count } = this.shape;
+    const { cols, cw, ch, ctx, dpr } = gc;
+    if (!s) return;
+    const P = REST_PIXEL;
+    // where the top of a letter's glyph sits in its cell
+    const top = ch * SETTLE_TOP;
+    const rect = (x: number, y: number, w: number, h: number, color: string) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round((gc.ox + x) * dpr), Math.round((gc.oy + y) * dpr), Math.ceil(w * dpr), Math.ceil(h * dpr));
+    };
+    for (let k = 0; k < count; k++) {
+      const i = cells[k];
+      const c = i % cols;
+      const r = (i / cols) | 0;
+      if (r > 0 && lit[i - cols]) continue;
+      if (skip(c, r)) continue;
+      const h = (((i + 1) * 2654435761) >>> 0) / 4294967296;
+      const x = c * cw;
+      const y = r * ch + top;
+      if (s.cover < 1) {
+        if (h > s.cover) continue;
+        rect(x + Math.floor((h / s.cover) * Math.max(0, cw - P)), y - P, P, P, h < s.cover * 0.5 ? s.color : s.shade);
+        continue;
+      }
+      // the shade on the edge, the snow above it, a pixel deeper here and there
+      const n = 1 + (h < 0.35 ? 1 : 0);
+      rect(x, y - P, cw, P, s.shade);
+      rect(x, y - P * (n + 1), cw, P * n, s.color);
+    }
   }
 
   get collapsed() {
@@ -357,6 +458,7 @@ export class AsciiTitle {
     if (!animate || rapid || prefersReducedMotion()) {
       this.reveal = 1;
       this.draw(0);
+      this.opts.onReveal?.(1);
       return;
     }
     if (this.opts.reveal === "vary") {
@@ -368,8 +470,9 @@ export class AsciiTitle {
     const dur = DURATION[this.mode];
     this.off = onFrame((t) => {
       const k = Math.min(1, (performance.now() - start) / dur);
-      this.reveal = this.mode === "assemble" || this.mode === "rain" ? k : 1 - (1 - k) * (1 - k);
+      this.reveal = this.mode === "assemble" || this.mode === "rain" || this.mode === "print" ? k : 1 - (1 - k) * (1 - k);
       this.draw(t);
+      this.opts.onReveal?.(this.reveal);
       if (k >= 1) {
         this.off?.();
         this.off = null;
@@ -384,7 +487,6 @@ export class AsciiTitle {
     const { cells, count, nx, ny, nz, edge, cov } = shape;
     const { cols, cw, ch, ctx, dpr } = gc;
     const pal = this.opts.palette.length - 1;
-    const rampMax = RAMP.length - 1;
     const reveal = this.reveal;
     const tick = (time * 30) | 0;
     // fixed light from the top left, a little in front
@@ -403,8 +505,9 @@ export class AsciiTitle {
     const fall = this.fall;
     const R = L.r;
 
-    if (this.opts.knockout && reveal >= 1 && fall === 0) {
-      ctx.fillStyle = this.opts.knockout;
+    const knock = this.opts.knockout;
+    if (knock && reveal >= 1 && fall === 0) {
+      ctx.fillStyle = knock;
       for (let k = 0; k < count; k++) {
         const i = cells[k];
         const c = i % cols;
@@ -428,10 +531,26 @@ export class AsciiTitle {
       }
     }
 
+    const printing = mode === "print" && reveal < 1;
+    const hot = pal + 1;
     for (let k = 0; k < count; k++) {
       const i = cells[k];
       const c = i % cols;
       const r = (i / cols) | 0;
+      if (printing) {
+        const at = this.printAt[i];
+        if (at > reveal) {
+          // not printed yet: the plan shows as dots along the outline
+          if (edge[i]) gc.put(46, c * cw, r * ch, Math.min(pal, 2), 0.5);
+          continue;
+        }
+        // laid down a moment ago: still glowing, then cooling into the type
+        const age = (reveal - at) * this.printPath.length;
+        if (age < 28) {
+          gc.put(35, c * cw, r * ch, 1 - age / 28 > 0.35 ? hot : pal, 1);
+          continue;
+        }
+      }
       // inside the lens the cell is drawn by the lens pass below
       if (lensOn && Math.hypot((c + 0.5) * cw - L.x, (r + 0.5) * ch - L.y) < R) continue;
       const seed = this.seeds[i];
@@ -512,7 +631,7 @@ export class AsciiTitle {
         oy += this.drop[i] * ch * t * t;
       }
       const diff = Math.max(0, nx[i] * lx + ny[i] * ly + nz[i] * lz);
-      let lum = 0.25 + diff * 0.85;
+      let lum = bodyLum(diff);
       let code: number;
       const e = edge[i];
       if (scrambling) {
@@ -521,14 +640,41 @@ export class AsciiTitle {
       } else if (e) {
         code = e;
         lum = 0.55 + 0.4 * cov[i];
-      } else {
-        code = RAMP.charCodeAt(Math.min(rampMax, Math.max(3, Math.round(Math.min(1, lum) * rampMax))));
-      }
+      } else code = bodyCode(lum);
       const ci = Math.min(pal, Math.max(0, Math.floor(Math.min(1, lum) * (pal + 0.999))));
       gc.put(code, c * cw + ox, r * ch + oy, ci, alpha);
     }
 
+    if (this.settle && reveal >= 1 && fall === 0) {
+      this.drawSettle((c, r) => lensOn && Math.hypot((c + 0.5) * cw - L.x, (r + 0.5) * ch - L.y) < R);
+    }
+    if (printing) this.drawHead(reveal, time);
     if (lensOn) this.drawLens(lift, flx, fly, flz);
+  }
+
+  /** the print head: a nozzle over the cell being laid down, on its rail, with sparks */
+  private drawHead(reveal: number, time: number) {
+    const { gc, printPath } = this;
+    const { cols, cw, ch } = gc;
+    if (!printPath.length) return;
+    const at = printPath[Math.min(printPath.length - 1, Math.floor(reveal * printPath.length))];
+    const c = at % cols;
+    const r = (at / cols) | 0;
+    const pal = this.opts.palette.length - 1;
+    const hot = pal + 1;
+    // a short stretch of rail either side of the carriage, fading out
+    const rail = r - 3;
+    if (rail >= 0) {
+      for (let x = Math.max(0, c - 8); x <= Math.min(cols - 1, c + 8); x++) {
+        gc.put(x === c ? 43 : 45, x * cw, rail * ch, Math.min(pal, 2), x === c ? 0.9 : 0.4 * (1 - Math.abs(x - c) / 9));
+      }
+    }
+    if (r - 2 >= 0) gc.put(124, c * cw, (r - 2) * ch, Math.min(pal, 3), 0.9);
+    if (r - 1 >= 0) gc.put(86, c * cw, (r - 1) * ch, Math.min(pal, 3), 0.9);
+    // one quiet spark
+    const tick = (time * 30) | 0;
+    const h = ((tick * 31) % 97) / 97;
+    gc.put(46, (c + Math.round((h - 0.5) * 4)) * cw, (r - (h > 0.5 ? 1 : 0)) * ch, hot, 0.6);
   }
 
   /**
@@ -541,11 +687,11 @@ export class AsciiTitle {
     const { nx, ny, nz, edge, cov } = shape;
     const { cols, rows, cw, ch, ctx, dpr } = gc;
     const pal = this.opts.palette.length - 1;
-    const rampMax = RAMP.length - 1;
     const R = L.r;
     const k = L.k;
-    if (this.opts.knockout) {
-      ctx.fillStyle = this.opts.knockout;
+    const knock = this.opts.knockout;
+    if (knock) {
+      ctx.fillStyle = knock;
       ctx.beginPath();
       ctx.arc((gc.ox + L.x) * dpr, (gc.oy + L.y) * dpr, Math.max(0, R - cw * 0.6) * dpr * Math.min(1, k * 1.5), 0, Math.PI * 2);
       ctx.fill();
@@ -579,13 +725,13 @@ export class AsciiTitle {
         const lz = flz + (lift * inv - flz) * k;
         const diff = Math.max(0, nx[i] * lx + ny[i] * ly + nz[i] * lz);
         const boost = f * k * 0.22;
-        let lum = 0.25 + diff * 0.85 + boost;
+        let lum = bodyLum(diff) + boost;
         let code: number;
         const e = edge[i];
         if (e) {
           code = e;
           lum = 0.55 + 0.4 * cov[i] + boost;
-        } else code = RAMP.charCodeAt(Math.min(rampMax, Math.max(3, Math.round(Math.min(1, lum) * rampMax))));
+        } else code = bodyCode(lum);
         const ci = Math.min(pal, Math.max(0, Math.floor(Math.min(1, lum) * (pal + 0.999))));
         gc.put(code, c * cw, r * ch, ci, 1);
       }
@@ -593,6 +739,7 @@ export class AsciiTitle {
   }
 
   destroy() {
+    this.offStore();
     this.off?.();
     this.fallOff?.();
     this.lensOff?.();

@@ -5,7 +5,7 @@ import { AsciiTitle } from "@/lib/ascii/ascii-title";
 import { family, fontsReady } from "@/lib/fonts";
 import { ScrollTrigger } from "@/lib/motion";
 import { textInVaried } from "@/lib/scramble";
-import { principles } from "@/lib/site";
+import { principles, site } from "@/lib/site";
 
 /** Pinned. Four principles, one at a time, printed large. */
 export default function Principles() {
@@ -38,7 +38,7 @@ export default function Principles() {
       title = new AsciiTitle(host, {
         fontFamily: family("mono"),
         displayFamily: family("display"),
-        knockout: "#08080a",
+        knockout: site.colors.bg,
         label: false,
         reveal: "vary",
       });

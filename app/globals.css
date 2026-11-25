@@ -3,18 +3,39 @@
 /* ------------------------------------------------------------------ */
 
 :root {
+  --night: #08080a;
+  --terra: #d97757;
   --bg: #08080a;
   --fg: #efeae2;
   --dim: #8a847c;
   --faint: #34302c;
   --accent: #ff5a2e;
+  /* a calmer warm, for things that fill and glow */
+  --warm: #d97757;
 
-  --pad: clamp(16px, 3vw, 52px);
-  --fs: 14px;
-  --fs-s: 12px;
+  /*
+   * One design pixel. Up to 1920 x 1080 it is exactly a pixel; on larger
+   * screens it grows with whichever side is the tighter fit, so a 2560 or a
+   * 4K screen shows the 1920 x 1080 layout, only larger, and an ultrawide
+   * does not blow the type up just for being wide. Sizes that must keep
+   * their proportions on big screens are written as multiples of it.
+   */
+  --u: max(1px, min(100vw / 1920, 100vh / 1080));
+
+  --pad: clamp(16px, 3vw, calc(52 * var(--u)));
+  --fs: calc(14 * var(--u));
+  --fs-s: calc(12 * var(--u));
 
   --mono: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
   --display: var(--font-display), var(--mono);
+}
+
+/* larger type on phones, where 12 px is too small to read comfortably */
+@media (max-width: 720px) {
+  :root {
+    --fs: 15px;
+    --fs-s: 13px;
+  }
 }
 
 *,
@@ -30,7 +51,7 @@ body {
 }
 
 html {
-  background: var(--bg);
+  background: var(--night);
   color: var(--fg);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -56,7 +77,7 @@ html.lenis body {
 
 body {
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--night);
   color: var(--fg);
   font-family: var(--mono);
   font-size: var(--fs);
@@ -179,6 +200,19 @@ canvas {
   color: var(--accent);
 }
 
+/*
+ * On touch screens every link gets a hit area of at least 24 px: padding
+ * with an equal negative margin, so it takes no more room and nothing moves.
+ * The links in the footer's tree sit about 30 px apart, so 0.3em each way
+ * keeps neighbours from overlapping.
+ */
+@media (pointer: coarse) {
+  .tl {
+    padding-block: 0.3em;
+    margin-block: -0.3em;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* fixed layers                                                         */
 /* ------------------------------------------------------------------ */
@@ -200,13 +234,14 @@ canvas {
   z-index: 90;
 }
 
+/* above everything, dialogs included: the cursor is always seen */
 .cursor-block {
   position: fixed;
-  z-index: 91;
+  z-index: 1000;
   top: 0;
   left: 0;
-  width: 8px;
-  height: 16px;
+  width: calc(8.4 * var(--u));
+  height: calc(16 * var(--u));
   background: #efeae2;
   mix-blend-mode: difference;
   pointer-events: none;
@@ -232,7 +267,7 @@ main {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
-  padding: 18px var(--pad);
+  padding: calc(18 * var(--u)) var(--pad);
   font-size: var(--fs-s);
   line-height: 1.4;
   mix-blend-mode: difference;
@@ -306,11 +341,37 @@ main {
   text-align: right;
 }
 
+/* the bar on touch screens: taller hit areas that take no more room (see .tl) */
+@media (pointer: coarse) {
+  .nav-brand,
+  .nav-shell {
+    padding: 0.7em 1ch;
+    margin: -0.7em -1ch;
+  }
+  .nav-links a {
+    padding-block: 0.7em;
+    margin-block: -0.7em;
+  }
+  /* the underline stays under the word, not under the taller box */
+  .nav-links a::before {
+    bottom: calc(0.7em - 3px);
+  }
+}
+
 @media (max-width: 720px) {
   .nav {
     grid-template-columns: 1fr auto;
+    gap: 2ch;
   }
   .nav-now {
+    display: none;
+  }
+}
+
+/* phones: the name, the shell and how far down; the sections are one
+   scroll away anyway, and the shell's `cd` flies to any of them */
+@media (max-width: 560px) {
+  .nav-links a {
     display: none;
   }
 }
@@ -319,44 +380,104 @@ main {
 /* loader                                                               */
 /* ------------------------------------------------------------------ */
 
+/*
+ * The loader, after lenis.dev: a black curtain with the letters in orange;
+ * under it the 3D wordmark with its letters in the same places (Loader.tsx
+ * moves both in step). Keep the numbers in step with it.
+ */
 .loader {
   position: fixed;
   inset: 0;
   z-index: 100;
   pointer-events: none;
-  font-size: var(--fs-s);
 }
 
-.loader-id {
+.loader-curtain {
   position: absolute;
-  top: 18px;
-  left: var(--pad);
+  inset: 0;
+  overflow: hidden;
+  background: var(--night);
+  /* a thin warm line marks the edge as it wipes up */
+  box-shadow: 0 1px 0 var(--terra);
+  will-change: transform;
+}
+
+/* the letters in a zigzag over two rows, one slot each */
+.loader-stage {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  padding: clamp(1rem, 2.8vw, 2.5rem);
+  will-change: transform;
+}
+
+.loader-slot {
+  grid-column: var(--col);
+  grid-row: var(--row);
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.loader-glyph {
   margin: 0;
+  font: inherit;
+  font-size: min(0.88vw, 1.9vh);
   font-weight: 700;
+  line-height: 1;
   white-space: pre;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.loader-log {
-  position: absolute;
-  left: var(--pad);
-  bottom: calc(var(--pad) * 0.8);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  line-height: 1.7;
-  white-space: pre;
+/*
+ * On the curtain: orange, lit from the top (peach into the accent, down to
+ * rust), each letter rising out of its slot from the first paint, before
+ * any script (100 ms delay, 35 ms stagger, 850 ms).
+ */
+.loader-curtain .loader-glyph {
+  color: var(--terra);
+  background-image: linear-gradient(180deg, #f2a888 0%, var(--terra) 38%, #c2502c 72%, #8f3f27 100%);
+  transform: translate3d(0, calc(135% + var(--i) * 5%), 0);
+  animation: loader-rise 0.85s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+  animation-delay: calc(100ms + var(--i) * 35ms);
+  will-change: transform;
 }
 
-.loader-log .is-wait {
-  color: var(--faint);
+@keyframes loader-rise {
+  to {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
-.loader-log .is-run {
-  color: var(--accent);
+/* the way out, 0.72 s on lenis' curve: the curtain shoots up while its
+   stage moves down by exactly as much, so its letters hold their place on
+   screen and only the edge moves over them */
+.loader.is-out .loader-curtain {
+  transform: translate3d(0, -100%, 0);
+  transition: transform 0.72s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
-.loader-log .is-ok {
-  color: var(--dim);
+.loader.is-out .loader-curtain .loader-stage {
+  transform: translate3d(0, 100%, 0);
+  transition: transform 0.72s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* every printed letter flies onto its letter of the wordmark (target set
+   by Loader.tsx), on the same curve as the wordmark's own letters */
+.loader-slot {
+  transition: transform 0.72s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -371,35 +492,62 @@ main {
 
 .hero-foot {
   position: absolute;
-  left: var(--pad);
-  right: var(--pad);
-  bottom: calc(var(--pad) * 0.8);
+  left: 0;
+  right: 0;
+  bottom: calc(var(--pad) * 0.7);
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  align-items: end;
-  gap: 2ch;
+  justify-items: center;
+  gap: 2.2vh;
   font-size: var(--fs-s);
 }
 
-.hero-what,
-.hero-where {
+.hero-role {
   margin: 0;
-  display: flex;
-  flex-direction: column;
+  color: var(--dim);
+  letter-spacing: 0.42em;
   white-space: pre;
+  /* the spacing hangs off the last letter: keep the word centred */
+  margin-right: -0.42em;
 }
 
-.hero-what span:first-child {
+.hero-down {
+  display: block;
+  padding: 0.4em 1.2ch;
   color: var(--fg);
-  font-weight: 600;
 }
 
-@media (max-width: 720px) {
-  .hero-foot {
-    grid-template-columns: 1fr auto;
+/* a : : v that keeps falling */
+.hero-cue {
+  display: block;
+  height: 3.3em;
+  overflow: hidden;
+  line-height: 1.1;
+}
+
+.hero-cue i {
+  display: block;
+  font-style: normal;
+  white-space: pre;
+  animation: cue 1.8s steps(6) infinite;
+}
+
+.hero-down:hover .hero-cue i,
+.hero-down:focus-visible .hero-cue i {
+  color: var(--accent);
+}
+
+@keyframes cue {
+  from {
+    transform: translateY(-3.3em);
   }
-  .hero-where {
-    display: none;
+  to {
+    transform: translateY(3.3em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-cue i {
+    animation: none;
   }
 }
 
@@ -428,13 +576,63 @@ main {
 }
 
 .about-title {
-  width: min(48vw, 820px);
-  height: clamp(150px, 34vh, 330px);
+  width: min(48vw, calc(820 * var(--u)));
+  height: clamp(170px, 40vh, calc(380 * var(--u)));
 }
 
-.about-line {
-  margin: 2.4vh 0 0;
+/* the build log next to the print */
+.about-log {
+  display: inline-grid;
+  margin: 3.4vh 0 0;
+  font: inherit;
   font-size: var(--fs-s);
+  line-height: 1.75;
+  color: var(--dim);
+  white-space: pre;
+  opacity: 0;
+  transition: opacity 0.3s steps(3);
+}
+
+.about-log.is-on {
+  opacity: 1;
+}
+
+.about-cmd {
+  color: var(--fg);
+}
+
+.about-log b {
+  font-weight: 400;
+  color: var(--warm);
+}
+
+.about-log i {
+  font-style: normal;
+  color: var(--faint);
+}
+
+.about-log em {
+  font-style: normal;
+  color: var(--fg);
+}
+
+.about-run {
+  color: var(--fg);
+  visibility: hidden;
+}
+
+.about-log.is-done .about-run {
+  visibility: visible;
+}
+
+.about-caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.05em;
+  margin-left: 0.4ch;
+  vertical-align: text-bottom;
+  background: var(--warm);
+  animation: caret 1s steps(1) infinite;
 }
 
 @media (max-width: 720px) {
@@ -465,7 +663,7 @@ main {
   left: var(--pad);
   top: 50%;
   transform: translateY(-58%);
-  width: min(44vw, 760px);
+  width: min(44vw, calc(760 * var(--u)));
 }
 
 .sk-num {
@@ -481,7 +679,7 @@ main {
 
 .sk-name {
   width: 100%;
-  height: clamp(120px, 27vh, 270px);
+  height: clamp(120px, 27vh, calc(270 * var(--u)));
 }
 
 .sk-note {
@@ -533,6 +731,13 @@ main {
   }
 }
 
+/* low screens (a phone on its side): the list would run into the copy */
+@media (max-height: 560px) {
+  .sk-list {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* principles                                                           */
 /* ------------------------------------------------------------------ */
@@ -569,13 +774,13 @@ main {
 }
 
 .pr-title {
-  width: min(100%, 1200px);
-  height: clamp(160px, 40vh, 400px);
+  width: min(100%, calc(1200 * var(--u)));
+  height: clamp(160px, 40vh, calc(400 * var(--u)));
 }
 
 .pr-line {
   margin: 2.6vh 0 0;
-  font-size: clamp(13px, 1vw, 16px);
+  font-size: clamp(13px, 1vw, calc(16 * var(--u)));
   color: var(--dim);
 }
 
@@ -676,7 +881,7 @@ main {
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   align-items: center;
   gap: 4vw;
-  padding: calc(var(--pad) + 44px) var(--pad) calc(var(--pad) + 30px);
+  padding: calc(var(--pad) + 44 * var(--u)) var(--pad) calc(var(--pad) + 30 * var(--u));
 }
 
 .wk-film {
@@ -735,7 +940,7 @@ main {
 
 .wk-name {
   width: 100%;
-  height: clamp(80px, 17vh, 170px);
+  height: clamp(80px, 17vh, calc(170 * var(--u)));
 }
 
 .wk-kind {
@@ -801,8 +1006,8 @@ main {
 }
 
 .ix-title {
-  width: min(60vw, 980px);
-  height: clamp(80px, 16vh, 160px);
+  width: min(60vw, calc(980 * var(--u)));
+  height: clamp(80px, 16vh, calc(160 * var(--u)));
   margin-bottom: 7vh;
 }
 
@@ -855,13 +1060,13 @@ main {
 
 @media (min-width: 1100px) and (pointer: fine) {
   .ix-body {
-    grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 400px);
-    gap: 0 6ch;
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 31vw, calc(560 * var(--u)));
+    gap: 0 5ch;
     align-items: start;
   }
   .ix-peek {
     display: block;
-    opacity: 0.38;
+    opacity: 0.72;
     transition: opacity 0.3s steps(4);
   }
   .ix-peek.is-hot {
@@ -915,9 +1120,255 @@ main {
   line-height: 1;
 }
 
+/* under the cursor the leader fills up, like a transfer bar */
+.ix-dots {
+  position: relative;
+}
+
+.ix-dots::after {
+  content: "================================================================================================================================================";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.ix-row:hover .ix-dots::after {
+  width: 100%;
+  transition: width 0.5s steps(24);
+}
+
 .ix-kind {
   font-size: var(--fs-s);
   white-space: pre;
+}
+
+/*
+ * A secret was found: a small toast at the top right, like an advancement
+ * in a game. A dark panel with pixel corners and an inner rim, the icon in
+ * its own box, a warm header. It only exists while it shows.
+ */
+.ach {
+  --ach-panel: #141216;
+  --ach-rim: #2e2a33;
+  --ach-head: #f2c14e;
+  position: fixed;
+  z-index: 85;
+  top: calc(var(--pad) + 40 * var(--u));
+  right: var(--pad);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.4ch;
+  width: min(calc(330 * var(--u)), calc(100vw - var(--pad) * 2));
+  padding: calc(9 * var(--u)) calc(12 * var(--u)) calc(9 * var(--u)) calc(9 * var(--u));
+  font-size: var(--fs-s);
+  line-height: 1.35;
+  color: var(--fg);
+  background: var(--ach-panel);
+  box-shadow:
+    inset 0 0 0 2px var(--ach-rim),
+    inset 0 0 0 3px #000;
+  /* pixel corners: one step cut out of each */
+  clip-path: polygon(
+    0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)
+  );
+  pointer-events: none;
+  transform: translateX(calc(100% + var(--pad) + 8px));
+  transition: transform 0.42s cubic-bezier(0.2, 0.9, 0.1, 1);
+}
+
+.ach.is-on {
+  transform: translateX(0);
+}
+
+.ach[hidden] {
+  display: none;
+}
+
+/* the icon, in a darker box of its own */
+.ach-icon {
+  margin: 0;
+  padding: 0.45em 0.6ch;
+  font: inherit;
+  font-size: calc(var(--fs-s) * 0.92);
+  font-weight: 700;
+  line-height: 1.12;
+  color: var(--accent);
+  background: #0b0a0d;
+  box-shadow: inset 0 0 0 1px var(--ach-rim);
+  white-space: pre;
+}
+
+.ach-text {
+  min-width: 0;
+}
+
+.ach-text p {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ach-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1ch;
+  color: var(--ach-head);
+}
+
+.ach-count {
+  color: var(--dim);
+}
+
+.ach-name {
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.ach-line {
+  color: var(--dim);
+}
+
+.ach-progress {
+  color: var(--faint);
+}
+
+.ach-bar {
+  color: var(--warm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ach {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* code: a screen printing a real excerpt (lib/code-view.ts)           */
+/* ------------------------------------------------------------------ */
+
+.code {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1.6em 1.8em;
+  overflow: hidden;
+  font-size: calc(11 * var(--u));
+  line-height: 1.5;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  outline: 1px dashed var(--faint);
+  outline-offset: -0.7em;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.18s steps(3),
+    visibility 0s 0.18s;
+}
+
+.code.is-on {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.12s steps(2);
+}
+
+.code-head {
+  margin: 0 0 1.1em;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-body {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+}
+
+.code-line {
+  display: block;
+  min-height: 1.5em;
+}
+
+.code.is-on .code-line {
+  animation: code-type 0.3s steps(18, end) calc(var(--i) * 45ms) both;
+}
+
+@keyframes code-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.code-line i {
+  font-style: normal;
+  color: var(--dim);
+  opacity: 0.6;
+  margin-right: 2ch;
+  white-space: pre;
+  user-select: none;
+}
+
+.code-caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  margin-left: 0.3ch;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.tk-k {
+  color: var(--accent);
+}
+
+.tk-s {
+  color: var(--dim);
+}
+
+.tk-n {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.tk-c {
+  color: var(--dim);
+  opacity: 0.75;
+}
+
+.ix-screen .code {
+  --code-max: 12;
+}
+
+.wk-screen .code {
+  --code-max: 15;
+  padding: 2.2em 2.4em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code.is-on .code-line,
+  .code-caret {
+    animation: none;
+  }
 }
 
 .ix-links {
@@ -930,12 +1381,104 @@ main {
   .ix-title {
     width: 100%;
   }
+  /* long names wrap instead of pushing the links past the edge */
   .ix-row {
-    grid-template-columns: 3ch 1fr auto;
+    grid-template-columns: 3ch minmax(0, 1fr) auto;
+  }
+  .ix-name {
+    white-space: normal;
+    overflow-wrap: break-word;
   }
   .ix-dots,
   .ix-kind {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* quotes between the sections                                          */
+/* ------------------------------------------------------------------ */
+
+.qt {
+  position: relative;
+  padding: 34vh var(--pad) 38vh;
+}
+
+.qt-fig {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 3.2ch;
+  align-items: start;
+  margin: 0;
+  max-width: calc(1180 * var(--u));
+}
+
+/* the " is two modules of seven tall: the box is the full cap height */
+.qt-mark {
+  grid-row: 1 / span 2;
+  width: clamp(70px, 7.4vw, calc(124 * var(--u)));
+  height: clamp(120px, 12.5vw, calc(210 * var(--u)));
+  margin-top: 0.15em;
+}
+
+.qt-text {
+  margin: 0;
+}
+
+.qt-text p {
+  margin: 0;
+  max-width: 26ch;
+  font-size: clamp(22px, 3.3vw, calc(52 * var(--u)));
+  font-weight: 500;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+}
+
+.qt-shown i {
+  font-style: normal;
+  color: var(--faint);
+}
+
+.qt-sort .qt-shown i {
+  color: var(--dim);
+}
+
+.qt-shown b {
+  font-weight: inherit;
+  color: var(--accent);
+}
+
+.qt-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.92em;
+  margin-left: 0.04em;
+  vertical-align: -0.06em;
+  background: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
+
+.qt-ghost {
+  visibility: hidden;
+}
+
+.qt-by {
+  grid-column: 2;
+  margin-top: 3.2vh;
+  font-size: var(--fs-s);
+  color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .qt-fig {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qt-mark {
+    grid-row: auto;
+    margin-bottom: 2.4vh;
+  }
+  .qt-by {
+    grid-column: 1;
   }
 }
 
@@ -957,10 +1500,10 @@ main {
 
 .ct-title {
   position: absolute;
-  top: calc(var(--pad) + 50px);
+  top: calc(var(--pad) + 50 * var(--u));
   left: var(--pad);
-  width: min(46vw, 760px);
-  height: clamp(110px, 24vh, 230px);
+  width: min(46vw, calc(760 * var(--u)));
+  height: clamp(110px, 24vh, calc(230 * var(--u)));
 }
 
 .ct-bottom {
@@ -970,23 +1513,46 @@ main {
   bottom: calc(var(--pad) * 1.4);
 }
 
-.ct-mail {
-  display: block;
-  width: min(50vw, 820px);
+.ct-ask {
+  margin: 0 0 1.2vh;
+  font-size: var(--fs-s);
 }
 
-.ct-mail-art {
-  width: 100%;
-  height: clamp(54px, 11vh, 110px);
+/* the address, large and plain, underlined in characters */
+.ct-mail {
+  display: inline-block;
+  font-size: clamp(22px, 3.4vw, calc(54 * var(--u)));
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.ct-mail::after {
+  content: "";
+  display: block;
+  height: 0.5em;
+  margin-top: 0.15em;
+  background: linear-gradient(90deg, var(--faint) 50%, transparent 50%) 0 50% / 0.6ch 1px repeat-x;
+  transition: background-color 0.3s steps(3);
+}
+
+.ct-mail:hover::after,
+.ct-mail:focus-visible::after {
+  background-image: linear-gradient(90deg, var(--accent) 50%, transparent 50%);
+}
+
+.ct-actions {
+  display: flex;
+  gap: 2ch;
+  margin: 2vh 0 0;
+  font-size: var(--fs-s);
 }
 
 @media (max-width: 720px) {
-  .ct-title,
-  .ct-mail {
+  .ct-title {
     width: 100%;
-  }
-  .ct-mail-art {
-    height: clamp(90px, 15vh, 130px);
   }
 }
 
@@ -994,32 +1560,50 @@ main {
 /* footer                                                               */
 /* ------------------------------------------------------------------ */
 
+/* the end of the page lands as exactly one screen, on any device: the
+   name and its water take whatever height the rest leaves */
 .ft {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 5vh;
-  padding: 16vh var(--pad) calc(var(--pad) * 0.8);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: clamp(12px, 3.6vh, calc(44 * var(--u)));
+  /* clear of the fixed bar at the top */
+  padding: calc(var(--pad) + 56 * var(--u)) var(--pad) calc(var(--pad) * 0.7);
   font-size: var(--fs-s);
 }
 
-.ft-cols {
+/* where to find me, as a file tree */
+.ft-tree {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4vh 3ch;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75em 1.6ch;
+  font-size: var(--fs);
 }
 
-.ft-col {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 0.7em;
-}
-
-.ft-path {
-  margin: 0 0 0.4em;
+.ft-root {
+  grid-column: 1 / -1;
   color: var(--accent);
+}
+
+.ft-br {
+  color: var(--faint);
+  white-space: pre;
+}
+
+.ft-dir {
+  min-width: 11ch;
+  color: var(--dim);
+}
+
+.ft-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em 2ch;
 }
 
 .ft-shell,
@@ -1034,8 +1618,19 @@ main {
 }
 
 .ft-hint {
+  font-size: var(--fs-s);
   color: var(--faint);
   transition: color 0.3s steps(3);
+}
+
+/* a hit area of at least 24 px on touch screens, as for .tl (the reset above
+   would take it back otherwise) */
+@media (pointer: coarse) {
+  .ft-shell,
+  .ft-hint {
+    padding-block: 0.3em;
+    margin-block: -0.3em;
+  }
 }
 
 .ft-hint:hover,
@@ -1043,25 +1638,82 @@ main {
   color: var(--dim);
 }
 
-.ft-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4em 3ch;
-  margin: 0;
-  white-space: pre;
+.qt.qt-foot {
+  padding: 0;
 }
 
-.ft-status b {
-  font-weight: 400;
-  color: var(--fg);
+.qt-foot .qt-mark {
+  width: clamp(36px, 3.6vw, calc(60 * var(--u)));
+  height: clamp(50px, min(5.4vw, 8vh), calc(92 * var(--u)));
 }
 
+.qt-foot .qt-text p {
+  max-width: 40ch;
+  font-size: clamp(15px, min(1.7vw, 2.7vh), calc(26 * var(--u)));
+}
+
+.qt-foot .qt-by {
+  margin-top: 1.6vh;
+}
+
+/* the name, and the name again upside down in the water */
+.ft-pool {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 2.3fr) minmax(0, 1fr);
+}
+
+/* wide screens: the tree and the quote side by side, the name gets the room */
+@media (min-width: 900px) {
+  .ft {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .ft-tree {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .qt.qt-foot {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+  .ft-pool,
+  .ft-base {
+    grid-column: 1 / -1;
+  }
+}
+
+/* the name fits itself into what is left; the water takes the rest */
 .ft-mark {
-  align-self: end;
   width: 100%;
-  height: clamp(110px, 21vw, 520px);
-  max-height: 46vh;
+  min-height: 0;
+  height: 100%;
   cursor: pointer;
+}
+
+.ft-water {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  border-top: 1px dashed var(--faint);
+}
+
+/* short screens: the quote steps aside for the name, and its row goes with
+   it, or the name would slide into a row with no height */
+@media (max-height: 560px) {
+  .qt-foot {
+    display: none;
+  }
+  .ft {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
+.ft-water canvas {
+  position: absolute;
+  inset: 0;
 }
 
 .ft-base {
@@ -1072,14 +1724,15 @@ main {
 }
 
 @media (max-width: 720px) {
-  .ft {
-    padding-top: 12vh;
+  .ft-tree {
+    grid-template-columns: auto minmax(0, 1fr);
+    font-size: var(--fs-s);
   }
-  .ft-cols {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ft-dir {
+    display: none;
   }
-  .ft-mark {
-    height: 22vw;
+  .qt-foot .qt-mark {
+    display: none;
   }
 }
 
@@ -1102,77 +1755,184 @@ main {
   color: var(--dim);
 }
 
-.sc {
+/* the season picker: four landscapes in pixel art */
+.sn {
   position: fixed;
   inset: 0;
   z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: var(--pad);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+}
+
+.sn-panel {
+  display: grid;
+  gap: calc(18 * var(--u));
+  width: min(100%, calc(1000 * var(--u)));
+  padding: clamp(14px, 2.2vw, calc(30 * var(--u)));
+  border: 1px solid var(--faint);
   background: var(--bg);
 }
 
-.sc-canvas {
-  position: absolute;
-  inset: 0;
-}
-
-.sc-top {
-  position: absolute;
-  top: calc(var(--pad) + 12px);
-  left: var(--pad);
-  max-width: min(46ch, 80vw);
-}
-
-.sc-title {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: clamp(30px, 4.2vw, 76px);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
-  text-transform: uppercase;
-}
-
-.sc-line {
-  margin: 1.2em 0 0;
-  font-size: var(--fs-s);
-  color: var(--dim);
-}
-
-.sc-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 18px var(--pad) calc(var(--pad) * 0.8);
-  background: var(--bg);
+.sn-head {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1em 3ch;
+  gap: 0.4em 2ch;
+  margin: 0;
   font-size: var(--fs-s);
 }
 
-.sc-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4em 3ch;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--faint);
-  white-space: pre;
-}
-
-.sc-list .is-now {
-  color: var(--dim);
-}
-
-.sc-list .is-found {
+.sn-prompt {
   color: var(--accent);
 }
 
-.sc-next {
+.sn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.6ch;
+}
+
+.sn-tile {
+  display: grid;
+  align-content: start;
+  gap: 0.35em;
+  padding: 0 0 0.9em;
+  border: 1px dashed var(--faint);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s steps(3);
+}
+
+.sn-tile:hover,
+.sn-tile:focus-visible {
+  border-color: var(--dim);
+  outline: none;
+}
+
+.sn-tile.is-on {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* the canvas holds the real pixels (lib/pixel/landscape.ts); scaled up sharp */
+.sn-scene {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  margin-bottom: 0.4em;
+  image-rendering: pixelated;
+}
+
+.sn-name,
+.sn-what {
+  padding: 0 0.9em;
+}
+
+.sn-name b {
+  margin-right: 0.6ch;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sn-name i {
+  font-style: normal;
+  color: var(--dim);
+}
+
+.sn-what {
+  font-size: var(--fs-s);
+}
+
+.sn-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8em 3ch;
+  font-size: var(--fs-s);
+}
+
+.sn-foot .tl:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .sn-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sn-keys {
+    display: none;
+  }
+}
+
+/* `lights`: the page goes dark, a torch follows the cursor */
+.lights {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--lx, 50%) var(--ly, 50%),
+    transparent 0,
+    transparent calc(110 * var(--u)),
+    color-mix(in srgb, var(--bg) 97%, transparent) calc(230 * var(--u))
+  );
+  opacity: 0;
+  transition: opacity 0.5s steps(5);
+}
+
+.lights.is-on {
+  opacity: 1;
+}
+
+/* `zen`: the copy fades out, only the world is left */
+html.zen-ready :is(main, footer, .nav) {
+  transition: opacity 0.8s ease;
+}
+
+html.is-zen :is(main, footer, .nav) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.zen-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--pad) * 1.2);
+  z-index: 47;
   margin: 0;
+  transform: translateX(-50%);
+  font-size: var(--fs-s);
+  color: var(--dim);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: zen-hint 3.2s ease forwards;
+}
+
+@keyframes zen-hint {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* the season's weather over every page; it never takes a click */
+.wx {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1205,6 +1965,20 @@ main {
 .sh-out p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.sh-in[hidden] {
+  display: none;
+}
+
+.sh-game {
+  margin: 0.8em 0;
+  font: inherit;
+  line-height: 1.12;
+  color: var(--fg);
+  white-space: pre;
+  user-select: none;
+  touch-action: none;
 }
 
 .sh-dim {
@@ -1405,8 +2179,8 @@ main {
   position: absolute;
   left: 0;
   top: 0;
-  width: clamp(220px, 26vw, 420px);
-  height: clamp(50px, 6vw, 96px);
+  width: clamp(220px, 26vw, calc(420 * var(--u)));
+  height: clamp(50px, 6vw, calc(96 * var(--u)));
   will-change: transform;
 }
 
@@ -1424,7 +2198,7 @@ main {
   margin: 0 0 1em;
   font-family: var(--display);
   font-weight: 800;
-  font-size: clamp(32px, 5vw, 72px);
+  font-size: clamp(32px, 5vw, calc(72 * var(--u)));
   line-height: 0.95;
   letter-spacing: -0.05em;
   text-transform: uppercase;

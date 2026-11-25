@@ -84,6 +84,7 @@ export default function Reveal() {
         " every pixel on this page is a character.",
         ` source: ${site.github}`,
         " there is a shell. press `",
+        " or call nexor()",
         "",
       ].join("\n"),
       );

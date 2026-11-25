@@ -1,3 +1,5 @@
+import type { Form } from "./world/shaders";
+
 /*
  * Everything about the site lives here. The address comes from the
  * environment (NEXT_PUBLIC_SITE_URL, or the production URL Vercel provides),
@@ -19,6 +21,8 @@ export const site = {
   name: "Nexor",
   handle: "Plattnericus",
   role: "Fullstack Developer",
+  /** the line the About section prints */
+  line: "I build things that run.",
   url,
   domain,
   title: "NEXOR / Plattnericus: fullstack, devops, security",
@@ -61,6 +65,14 @@ export type Project = {
   clip: string;
   /** focus point of the 4:3 crop, 0..1 */
   focus?: [number, number];
+  /**
+   * The excerpt shown when hovering the source link: a file in the repo and
+   * a line to start at. Fetched from GitHub at build time (lib/snippets.ts),
+   * so it is always the real, current code.
+   */
+  code?: { path: string; at: string; lines?: number };
+  /** repos the random excerpts are drawn from; just `source` when left out */
+  codeFrom?: string[];
 };
 
 export const projects: Project[] = [
@@ -71,7 +83,14 @@ export const projects: Project[] = [
     description: "Timetable, grades and messages for a real school.",
     tech: ["Next.js", "TypeScript", "Docker", "Cloudflare"],
     live: { href: "https://pokyh.com", label: "pokyh.com" },
-    source: "https://github.com/bedchem/POKYH",
+    source: "https://github.com/bedchem/pokyh-frontend",
+    code: { path: "lib/timetable-logic.ts", at: "export function buildSlots", lines: 16 },
+    codeFrom: [
+      "https://github.com/bedchem/pokyh-frontend",
+      "https://github.com/bedchem/pokyh-backend",
+      "https://github.com/bedchem/POKYH_IOS",
+      "https://github.com/bedchem/POKYH_ANDROID",
+    ],
     clip: "/clips/pokyh.mp4",
   },
   {
@@ -82,6 +101,7 @@ export const projects: Project[] = [
     tech: ["React Three Fiber", "Three.js", "Vite"],
     live: { href: "https://fly.pokyh.com", label: "fly.pokyh.com" },
     source: "https://github.com/bedchem/fruit-fly-hub",
+    code: { path: "src/neural/simulation.js", at: "  tick(h) {", lines: 13 },
     clip: "/clips/fly_lab.mp4",
   },
   {
@@ -92,6 +112,7 @@ export const projects: Project[] = [
     tech: ["Three.js", "WebGL", "GLSL"],
     live: { href: "https://threejs.plattnericus.dev", label: "threejs.plattnericus.dev" },
     source: "https://github.com/Plattnericus/Stargazer_Tree",
+    code: { path: "lib/bonsai.ts", at: "export function bonsaiNodes", lines: 16 },
     clip: "/clips/threejs_portfolio.mp4",
   },
   {
@@ -105,6 +126,7 @@ export const projects: Project[] = [
       label: "streamdeck.plattnericus.dev",
     },
     source: "https://github.com/Plattnericus/StreamDeck",
+    code: { path: "src/routes/apps/Terminal.jsx", at: "const normalizePath = (p) =>", lines: 17 },
     clip: "/clips/streamdeck.mp4",
   },
   {
@@ -115,6 +137,7 @@ export const projects: Project[] = [
     tech: ["Node.js", "Raspberry Pi"],
     live: { href: "https://magicmirror.plattnericus.dev", label: "magicmirror.plattnericus.dev" },
     source: "https://github.com/bedchem/Magic-Mirror",
+    code: { path: "src/utils/handTracking.js", at: "const rotateNormalizedPoint", lines: 20 },
     clip: "/clips/magicmirror.mp4",
   },
   {
@@ -125,6 +148,7 @@ export const projects: Project[] = [
     tech: ["Socket.IO", "Grid algorithms"],
     live: { href: "https://minesweeper.plattnericus.dev", label: "minesweeper.plattnericus.dev" },
     source: "https://github.com/bedchem/Minesweeper",
+    code: { path: "src/minesweeper.js", at: "function floodReveal", lines: 15 },
     clip: "/clips/minesweeper.mp4",
   },
   {
@@ -135,26 +159,58 @@ export const projects: Project[] = [
     tech: ["Java", "Fabric"],
     live: { href: "https://modrinth.com/mod/projectile.preview", label: "modrinth" },
     source: "https://github.com/Ryhox/ProjectilePreview-Mod",
+    code: {
+      path: "src/client/java/dev/duels/projectilepreview/client/projectile/TrajectorySim.java",
+      at: "for (int i = 1; i <= steps; i++)",
+      lines: 17,
+    },
     clip: "/clips/projectile_preview.mp4",
   },
 ];
 
-export const skills = [
-  { name: "Next.js & React", note: "this site, POKYH" },
-  { name: "Three.js & WebGL", note: "this site, Fly Lab, Stargazer Tree" },
-  { name: "TypeScript", note: "end to end, strict" },
-  { name: "Docker & Linux", note: "POKYH ships in containers" },
-  { name: "Cloudflare & selfhosting", note: "POKYH behind Cloudflare, Magic-Mirror on a Pi" },
-  { name: "APIs & backends", note: "real-time multiplayer in Minesweeper" },
-  { name: "Security mindset", note: "hardening, sane auth, offensive skills" },
+/**
+ * The tools, each with the symbol the object turns into while it is named
+ * (one of FORMS in lib/world/shaders.ts).
+ */
+export const skills: { name: string; note: string; shape: Form }[] = [
+  { name: "Next.js & React", note: "this site, POKYH", shape: "atom" },
+  { name: "Three.js & WebGL", note: "this site, Fly Lab, Stargazer Tree", shape: "cube" },
+  { name: "TypeScript", note: "end to end, strict", shape: "code" },
+  { name: "Docker & Linux", note: "POKYH ships in containers", shape: "containers" },
+  { name: "Cloudflare & selfhosting", note: "POKYH behind Cloudflare, Magic-Mirror on a Pi", shape: "cloud" },
+  { name: "APIs & backends", note: "real-time multiplayer in Minesweeper", shape: "network" },
+  { name: "Security mindset", note: "hardening, sane auth, offensive skills", shape: "lock" },
+];
+
+/** what the About section builds, in order */
+export const disciplines = ["interfaces", "backends", "servers", "security"];
+
+export type Quote = { text: string; by: string; year?: number };
+
+/**
+ * Lines worth keeping. The first two have a place on the page (before the
+ * contact and before the list of all projects); the footer draws one of the
+ * others at random, `fortune` in the shell any of them.
+ */
+export const quotes: Quote[] = [
+  { text: "Talk is cheap. Show me the code.", by: "Linus Torvalds", year: 2000 },
+  { text: "Simplicity is prerequisite for reliability.", by: "Edsger W. Dijkstra", year: 1975 },
+  { text: "The best way to predict the future is to invent it.", by: "Alan Kay", year: 1971 },
+  { text: "Security is a process, not a product.", by: "Bruce Schneier", year: 2000 },
+  { text: "Premature optimization is the root of all evil.", by: "Donald Knuth", year: 1974 },
+  { text: "Controlling complexity is the essence of computer programming.", by: "Brian Kernighan", year: 1976 },
+  { text: "Make it work, make it right, make it fast.", by: "Kent Beck" },
+  { text: "Real artists ship.", by: "Steve Jobs" },
+  { text: "Any sufficiently advanced technology is indistinguishable from magic.", by: "Arthur C. Clarke", year: 1973 },
 ];
 
 /** the four principles, worded as on the first version of the site */
 export const principles = [
-  { title: "Interfaces that pull you in", line: "motion with a purpose" },
   { title: "One stack, every layer", line: "designed together, not glued together" },
   { title: "Ship it for real", line: "it only counts once it runs" },
   { title: "Locked down by default", line: "security is not a feature request" },
+  // last, because the zoom right after it does exactly that
+  { title: "Interfaces that pull you in", line: "motion with a purpose" },
 ];
 
 /** GitHub's mark (github-mark.svg, 98x96). */

@@ -6,6 +6,7 @@ import { family } from "@/lib/fonts";
 import { getLenis } from "@/lib/motion";
 import { SPECIMEN_EVENT, markSecret } from "@/lib/secrets";
 import { worldState } from "@/lib/world/state";
+import { site } from "@/lib/site";
 
 const DEFAULT = "ABCDEFGHIJKLM NOPQRSTUVWXYZ 0123456789 &@!?";
 
@@ -55,7 +56,7 @@ export default function Specimen() {
       maxCell: 9,
       label: false,
       reveal: "assemble",
-      knockout: "#08080a",
+      knockout: site.colors.bg,
     });
     titleRef.current = title;
     title.set(DEFAULT);

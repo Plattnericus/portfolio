@@ -4,7 +4,7 @@
  *         along -z and the camera flies through them; output is a small
  *         colour + coverage image, two texels per character cell.
  *  ascii: turns that image into characters. Silhouettes get edge glyphs,
- *         bodies a density ramp; stars and seasonal weather fill the void.
+ *         bodies a density ramp; stars fill the void.
  */
 
 export const Z = {
@@ -19,7 +19,9 @@ export const Z = {
 export const SCREEN = { hw: 2.0, hh: 1.5, x: 2.7, turn: 0.55 };
 
 /** how many cuts through the wordmark are kept open at once */
+/** most letters the wordmark can move one by one (the loader's way in) */
 export const CUTS = 12;
+export const LETTERS = 8;
 
 export const fullVertex = /* glsl */ `
   varying vec2 vUv;
@@ -31,9 +33,19 @@ export const fullVertex = /* glsl */ `
 
 const f = (n: number) => n.toFixed(4);
 
+/** the shapes the object takes, in the order form() in the scene shader has them */
+export const FORMS = ["blob", "atom", "cube", "code", "containers", "cloud", "network", "lock"] as const;
+export type Form = (typeof FORMS)[number];
+/** a #rrggbb colour as a GLSL vec3 */
+const v3 = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `vec3(${f(((n >> 16) & 255) / 255)}, ${f(((n >> 8) & 255) / 255)}, ${f((n & 255) / 255)})`;
+};
+
 export const sceneFragment = /* glsl */ `
   precision highp float;
   #define CUTS ${CUTS}
+  #define LETTERS ${LETTERS}
   varying vec2 vUv;
 
   uniform vec3 uCamPos;
@@ -65,9 +77,17 @@ export const sceneFragment = /* glsl */ `
   uniform float uVidB;
   uniform float uScreensOn;
   uniform float uTextOn;
+  // the wordmark turned about its middle: yaw, pitch (radians; the whirl)
+  uniform vec2 uTilt;
   // cuts the cursor makes through the wordmark: text-local xyz, radius
   uniform vec4 uCuts[CUTS];
   uniform float uCutsOn;
+  // per letter of the wordmark: world offset x, y, scale, and its centre x at rest
+  uniform vec4 uLetter[LETTERS];
+  // where one letter ends and the next begins, at rest (count + 1 edges)
+  uniform float uLetterEdge[LETTERS + 1];
+  uniform float uLetterCount;
+  uniform float uLettersOn;
 
   #define ZD ${f(Z.digits)}
   #define ZT ${f(Z.text)}
@@ -124,6 +144,17 @@ export const sceneFragment = /* glsl */ `
   }
   float smax(float a, float b, float k) { return -smin(-a, -b, k); }
 
+  // the wordmark's own frame, turned by uTilt about its middle
+  vec3 tilted(vec3 q) {
+    float cy = cos(uTilt.x);
+    float sy = sin(uTilt.x);
+    q.xz = mat2(cy, sy, -sy, cy) * q.xz;
+    float cp = cos(uTilt.y);
+    float sp = sin(uTilt.y);
+    q.yz = mat2(cp, -sp, sp, cp) * q.yz;
+    return q;
+  }
+
   // a 2D field from a texture; outside its rect we only know a lower bound
   float field(sampler2D t, vec2 size, vec2 p) {
     vec2 q = abs(p) - size * 0.5;
@@ -132,9 +163,44 @@ export const sceneFragment = /* glsl */ `
     return texture2D(t, p / size + 0.5).r;
   }
 
-  // ---- the shapes the object in the void takes, one per skill
+  float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+    vec3 pa = p - a;
+    vec3 ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+  }
+
+  // the edges of a box only: a wireframe cube
+  float sdBoxFrame(vec3 p, vec3 b, float e) {
+    p = abs(p) - b;
+    vec3 q = abs(p + e) - e;
+    return min(min(
+      length(max(vec3(p.x, q.y, q.z), 0.0)) + min(max(p.x, max(q.y, q.z)), 0.0),
+      length(max(vec3(q.x, p.y, q.z), 0.0)) + min(max(q.x, max(p.y, q.z)), 0.0)),
+      length(max(vec3(q.x, q.y, p.z), 0.0)) + min(max(q.x, max(q.y, p.z)), 0.0));
+  }
+
+  // the wordmark with every letter moved and scaled on its own: each is read
+  // from its own slab of the field, at the place it would have at rest
+  float lettersField(vec2 q) {
+    float d = 1e9;
+    for (int i = 0; i < LETTERS; i++) {
+      if (float(i) >= uLetterCount) break;
+      vec4 L = uLetter[i];
+      vec2 c = vec2(L.w, 0.0);
+      vec2 p = (q - c - L.xy) / L.z + c;
+      float slab = max(uLetterEdge[i] - p.x, p.x - uLetterEdge[i + 1]);
+      d = min(d, max(field(tText, uTextSize, p), slab) * L.z);
+    }
+    return d;
+  }
+
+  // ---- the shapes the object in the void takes (FORMS in this file, in
+  // the same order): the drifting blob next to About, then one symbol per
+  // tool, chosen in lib/site.ts
   float form(int k, vec3 q) {
     if (k == 0) {
+      // blob: five drifting balls melted together
       float d = 1e9;
       for (int i = 0; i < 5; i++) {
         d = smin(d, length(q - uBalls[i].xyz) - uBalls[i].w, 0.75);
@@ -142,50 +208,88 @@ export const sceneFragment = /* glsl */ `
       return d;
     }
     if (k == 1) {
-      vec3 p = q;
-      p.xz *= rot(p.y * 0.9 + uTime * 0.4);
-      vec2 t = vec2(length(p.xz) - 1.55, p.y);
-      return length(t) - 0.55;
-    }
-    if (k == 2) {
-      vec3 p = q;
-      p.xy *= rot(uTime * 0.3);
-      return sdRoundBox(p, vec3(1.25), 0.28);
-    }
-    if (k == 3) {
-      float d = 1e9;
-      for (int i = 0; i < 4; i++) {
-        float fi = float(i);
-        vec3 p = q - vec3(sin(uTime * 0.7 + fi) * 0.25, (fi - 1.5) * 0.78, 0.0);
-        p.xz *= rot(fi * 0.45 + sin(uTime * 0.5 + fi * 1.7) * 0.4);
-        d = min(d, sdRoundBox(p, vec3(1.45, 0.3, 0.85), 0.06));
+      // atom: a nucleus, three orbits facing us, an electron on each
+      float d = length(q) - 0.42;
+      for (int i = 0; i < 3; i++) {
+        vec3 p = q;
+        p.xy *= rot(float(i) * 2.0944 + uTime * 0.12);
+        float e = (length(p.xy / vec2(2.15, 0.78)) - 1.0) * 0.78;
+        d = min(d, length(vec2(e, p.z)) - 0.1);
+        float a = uTime * (1.2 + float(i) * 0.35) + float(i) * 2.0;
+        d = min(d, length(p - vec3(cos(a) * 2.15, sin(a) * 0.78, 0.0)) - 0.17);
       }
       return d;
     }
+    if (k == 2) {
+      // cube: only its edges, turning
+      vec3 p = q;
+      p.xz *= rot(uTime * 0.35);
+      p.xy *= rot(0.62);
+      return sdBoxFrame(p, vec3(1.15), 0.09);
+    }
+    if (k == 3) {
+      // code: < / >
+      vec3 p = q / 1.45;
+      float r = 0.13;
+      float d = min(sdCapsule(p, vec3(-1.05, 0.0, 0.0), vec3(-0.45, 0.72, 0.0), r),
+                    sdCapsule(p, vec3(-1.05, 0.0, 0.0), vec3(-0.45, -0.72, 0.0), r));
+      d = min(d, min(sdCapsule(p, vec3(1.05, 0.0, 0.0), vec3(0.45, 0.72, 0.0), r),
+                     sdCapsule(p, vec3(1.05, 0.0, 0.0), vec3(0.45, -0.72, 0.0), r)));
+      return min(d, sdCapsule(p, vec3(-0.2, -0.85, 0.0), vec3(0.2, 0.85, 0.0), r)) * 1.45;
+    }
     if (k == 4) {
-      vec3 p = q * 2.1;
-      float g = abs(dot(sin(p + uTime * 0.6), cos(p.zxy))) / 2.1 - 0.09;
-      return max(length(q) - 2.0, g);
+      // containers: two on the ground, one on top, ribbed sides
+      float d = 1e9;
+      for (int i = 0; i < 3; i++) {
+        vec3 c = i == 2 ? vec3(0.0, 0.55, 0.0) : vec3(float(i) * 1.7 - 0.85, -0.42, 0.0);
+        vec3 p = q - c;
+        float box = sdRoundBox(p, vec3(0.78, 0.4, 0.62), 0.04);
+        box += sin(p.x * 22.0) * 0.012;
+        d = min(d, box);
+      }
+      return d;
     }
     if (k == 5) {
-      vec3 p = abs(q);
-      float d = (p.x + p.y + p.z - 2.1) * 0.57735;
-      return d - 0.08;
+      // cloud: three big bumps over a low, flat base
+      vec3 p = q * vec3(1.0, 1.0, 1.6);
+      float d = sdRoundBox(p - vec3(0.0, -0.62, 0.0), vec3(1.7, 0.24, 0.5), 0.22);
+      d = smin(d, length(p - vec3(-1.15, -0.28, 0.0)) - 0.6, 0.1);
+      d = smin(d, length(p - vec3(-0.35, 0.4, 0.0)) - 0.95, 0.1);
+      d = smin(d, length(p - vec3(0.7, 0.28, 0.0)) - 0.78, 0.1);
+      d = smin(d, length(p - vec3(1.35, -0.3, 0.0)) - 0.5, 0.1);
+      d = max(d, -0.86 - p.y);
+      return d / 1.6;
     }
-    // shell with a slot cut through: a lock face
-    float shell = abs(length(q) - 1.75) - 0.22;
-    float slot = sdBox(q - vec3(0.0, -0.2, 0.0), vec3(0.18, 0.55, 3.0));
-    float hole = length(q.xy - vec2(0.0, 0.35)) - 0.32;
-    return max(shell, -min(slot, max(hole, -1.0)));
+    if (k == 6) {
+      // network: services in a ring around a hub, every one wired to it
+      vec3 hub = vec3(0.0);
+      float d = length(q) - 0.42;
+      for (int i = 0; i < 5; i++) {
+        float a = float(i) * 1.2566 + uTime * 0.2;
+        vec3 n = vec3(cos(a) * 1.75, sin(a) * 1.15, sin(a * 2.0 + uTime) * 0.3);
+        d = min(d, length(q - n) - 0.27);
+        d = min(d, sdCapsule(q, hub, n, 0.07));
+      }
+      return d;
+    }
+    // lock: a body with a keyhole, and the shackle over it
+    float body = sdRoundBox(q - vec3(0.0, -0.5, 0.0), vec3(1.1, 0.85, 0.42), 0.12);
+    float key = min(length(q.xy - vec2(0.0, -0.3)) - 0.2, sdBox(q - vec3(0.0, -0.68, 0.0), vec3(0.08, 0.3, 1.0)));
+    body = max(body, -key);
+    vec3 s = q - vec3(0.0, 0.4, 0.0);
+    float ring = max(length(vec2(length(s.xy) - 0.7, s.z)) - 0.16, -s.y);
+    float legs = min(sdCapsule(q, vec3(-0.7, 0.4, 0.0), vec3(-0.7, -0.1, 0.0), 0.16),
+                     sdCapsule(q, vec3(0.7, 0.4, 0.0), vec3(0.7, -0.1, 0.0), 0.16));
+    return min(body, min(ring, legs));
   }
 
   float blob(vec3 p) {
     vec3 q = p - vec3(0.0, 0.0, ZB);
+    // turned towards the camera (uBlobSpin), so a symbol reads from the front
     q.xz *= rot(uBlobSpin);
-    q.yz *= rot(0.25);
-    float m = clamp(uMorph, 0.0, 6.0);
+    float m = clamp(uMorph, 0.0, 7.0);
     int a = int(floor(m));
-    int b = int(min(6.0, floor(m) + 1.0));
+    int b = int(min(7.0, floor(m) + 1.0));
     float t = smoothstep(0.0, 1.0, fract(m));
     if (t < 0.001 || a == b) return form(a, q);
     return mix(form(a, q), form(b, q), t);
@@ -227,9 +331,15 @@ export const sceneFragment = /* glsl */ `
 
     // the wordmark, only until the camera has flown through it
     if (uTextOn > 0.5) {
-      vec3 q = p - vec3(0.0, 0.0, ZT);
-      float bx = sdBox(q, vec3(uTextSize * 0.5, 0.6));
-      float d = bx > 0.5 ? bx : extrude(field(tText, uTextSize, q.xy) + 0.1, q.z, 0.34) - 0.1;
+      vec3 q0 = p - vec3(0.0, 0.0, ZT);
+      vec3 q = tilted(q0);
+      // while the letters fly on their own they can be anywhere on screen;
+      // a turned wordmark reaches further in depth
+      vec2 ext = uLettersOn > 0.5 ? uTextSize * vec2(0.75, 2.6) : uTextSize * 0.5;
+      float deep = 0.6 + abs(sin(uTilt.x)) * ext.x + abs(sin(uTilt.y)) * ext.y;
+      float bx = sdBox(q0, vec3(ext, deep));
+      float d2 = uLettersOn > 0.5 ? lettersField(q.xy) : field(tText, uTextSize, q.xy);
+      float d = bx > 0.5 ? bx : extrude(d2 + 0.1, q.z, 0.34) - 0.1;
       if (uCutsOn > 0.5 && bx <= 0.5) d = smax(d, -cutField(q), 0.1);
       if (d < res.x) res = vec2(d, 1.0);
     }
@@ -256,8 +366,9 @@ export const sceneFragment = /* glsl */ `
     // the at sign
     {
       vec3 q = p - vec3(0.0, 0.0, ZA);
-      q.xz *= rot(sin(uTime * 0.45) * 0.32);
-      q.yz *= rot(sin(uTime * 0.31) * 0.12);
+      // a slow sway, never far enough to lose the shape
+      q.xz *= rot(sin(uTime * 0.45) * 0.16);
+      q.yz *= rot(sin(uTime * 0.31) * 0.07);
       float bx = sdBox(q, vec3(uAtSize * 0.5, 0.8));
       float d = bx > 0.5 ? bx : extrude(field(tAt, uAtSize, q.xy) + 0.12, q.z, 0.45) - 0.12;
       if (d < res.x) res = vec2(d, 4.0);
@@ -337,9 +448,10 @@ export const sceneFragment = /* glsl */ `
       } else {
         col = vec3(0.18, 0.17, 0.16) * (0.3 + diff) + spec * 0.6;
       }
-    } else if (m > 0.5 && m < 1.5 && uCutsOn > 0.5) {
+    }
+    if (m > 0.5 && m < 1.5 && uCutsOn > 0.5) {
       // fresh cut walls glow and cool down as the letters grow back
-      vec3 q = p - vec3(0.0, 0.0, ZT);
+      vec3 q = tilted(p - vec3(0.0, 0.0, ZT));
       float heat = 0.0;
       for (int i = 0; i < CUTS; i++) {
         vec4 c = uCuts[i];
@@ -350,9 +462,10 @@ export const sceneFragment = /* glsl */ `
       }
       vec3 hot = mix(vec3(1.0, 0.28, 0.1), vec3(1.0, 0.82, 0.55), heat * heat);
       col = mix(col, hot * (0.75 + diff * 0.6 + spec), heat);
-    } else if (m > 3.5) {
+    }
+    if (m > 3.5 && m < 5.5) {
       col *= vec3(1.0, 0.72, 0.6);
-    } else if (m > 2.5) {
+    } else if (m > 2.5 && m < 3.5) {
       // the object takes a little warmth
       col *= mix(vec3(1.0), vec3(1.0, 0.7, 0.55), 0.35);
     }
@@ -361,7 +474,16 @@ export const sceneFragment = /* glsl */ `
   }
 `;
 
-export const asciiFragment = (atlas: {
+/*
+ * The ASCII pass runs in two steps. asciiCells decides, once per character
+ * cell, which glyph it shows and in what colour (scene, stars, weather,
+ * ripples, the charge ring...), into a small target of one texel per cell:
+ * rgb the colour already multiplied by its strength, a the glyph's index in
+ * the atlas plus half the strength (-1 for nothing). asciiGlyphs then only
+ * looks that up per screen pixel and draws the glyph. The work happens once
+ * per cell instead of once per device pixel.
+ */
+export const asciiCells = (fg: string, atlas: {
   tiles: number;
   ramp: [number, number];
   edges: number;
@@ -372,7 +494,6 @@ export const asciiFragment = (atlas: {
   varying vec2 vUv;
   uniform sampler2D tScene;
   uniform sampler2D tStars;
-  uniform sampler2D tAtlas;
   uniform vec2 uGrid;
   uniform vec2 uCell;
   uniform vec2 uOffset;
@@ -386,18 +507,11 @@ export const asciiFragment = (atlas: {
   // a held click charging: x, y, ring radius (device px), progress 0..1
   uniform vec4 uCharge;
   uniform vec3 uInk;
-  uniform float uWeather;
-  uniform vec3 uWeatherA;
-  uniform vec3 uWeatherB;
 
   float hash(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
-  }
-
-  float glyph(float index, vec2 local) {
-    return texture2D(tAtlas, vec2((index + local.x) / ${f(atlas.tiles)}, local.y)).r;
   }
 
   vec4 scene(vec2 cell) {
@@ -406,55 +520,24 @@ export const asciiFragment = (atlas: {
 
   float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
+
   void main() {
-    vec2 px = gl_FragCoord.xy - uOffset;
+    // one fragment per cell of the grid
+    vec2 cell = floor(gl_FragCoord.xy);
     vec2 size = uGrid * uCell;
     vec2 center = size * 0.5;
+    vec2 cellMid = (cell + 0.5) * uCell + uOffset;
 
-    // implosion: the grid is pulled into the middle and twisted
-    if (uImplode > 0.0) {
-      vec2 rel = px - center;
-      float r = length(rel) / length(center);
-      float a = uImplode * (1.0 - r) * 4.0;
-      rel = mat2(cos(a), -sin(a), sin(a), cos(a)) * rel;
-      px = center + rel * (1.0 + uImplode * 3.0 * (1.0 - r * 0.6));
-    }
-
-
-    // a held click pulls the characters around it in, turning
-    if (uCharge.w > 0.0) {
-      vec2 rel = px - uCharge.xy;
-      float reach = uCharge.z * 3.2;
-      float k = clamp(1.0 - length(rel) / reach, 0.0, 1.0);
-      k = k * k * uCharge.w;
-      float a = k * 2.4;
-      rel = mat2(cos(a), -sin(a), sin(a), cos(a)) * rel;
-      px = uCharge.xy + rel * (1.0 + k * 1.6);
-    }
-
-    // shockwaves from clicks (x, y, radius in device px, strength): a ring
-    // of line glyphs runs outwards and bends the characters it passes
+    // ripples from clicks (x, y, radius in device px, strength): two thin
+    // rings of dots, like a drop on still water; nothing is pushed around
     float ringHit = 0.0;
-    vec2 ringDir = vec2(0.0);
-    vec2 cellMid = (floor(px / uCell) + 0.5) * uCell + uOffset;
     for (int i = 0; i < 3; i++) {
       vec4 w = uWaves[i];
       if (w.w <= 0.0) continue;
-      vec2 rel = cellMid - w.xy;
-      float d = length(rel);
-      float k = 1.0 - abs(d - w.z) / (uCell.x * (2.0 + w.z / 260.0));
-      if (k * w.w > ringHit) {
-        ringHit = k * w.w;
-        ringDir = rel / max(d, 1.0);
-      }
-    }
-    px -= ringDir * ringHit * uCell.x * 1.8;
-
-    vec2 cell = floor(px / uCell);
-    vec2 local = fract(px / uCell);
-    if (cell.x < 0.0 || cell.y < 0.0 || cell.x >= uGrid.x || cell.y >= uGrid.y) {
-      gl_FragColor = vec4(0.0);
-      return;
+      float d = length(cellMid - w.xy);
+      float band = uCell.x * 1.3;
+      float k = max(1.0 - abs(d - w.z) / band, (1.0 - abs(d - w.z * 0.6) / band) * 0.55);
+      ringHit = max(ringHit, k * w.w);
     }
 
     vec4 s = scene(cell);
@@ -465,7 +548,7 @@ export const asciiFragment = (atlas: {
     float alpha = 0.0;
 
     float quiet = 1.0;
-    vec2 fp = gl_FragCoord.xy;
+    vec2 fp = cellMid;
     for (int i = 0; i < 4; i++) {
       vec4 q = uQuiet[i];
       if (q.z > 0.0) {
@@ -520,33 +603,6 @@ export const asciiFragment = (atlas: {
       }
     }
 
-    // the season's weather, once its secret has been found
-    if (uWeather > 0.5 && alpha < 0.5) {
-      if (uWeather < 2.5 || uWeather > 3.5) {
-        bool leaves = uWeather > 3.5;
-        for (int k = 0; k < 2; k++) {
-          float s = hash(vec2(cell.x, 3.1 + float(k) * 7.7));
-          if (s > (leaves ? 0.07 : 0.16)) continue;
-          float speed = mix(3.0, 9.0, fract(s * 13.0)) * (leaves ? 0.6 : uWeather > 1.5 ? 0.7 : 1.0);
-          float y = (1.0 - fract(s * 9.1 + uTime * speed / uGrid.y)) * uGrid.y;
-          if (abs(cell.y - floor(y)) < 0.5) {
-            if (leaves) idx = ${f(atlas.edges)} + mod(floor(uTime * 4.0 + s * 40.0), 4.0);
-            else idx = ${f(atlas.ramp[0])} + (s < 0.1 ? 8.0 : s < 0.2 ? 7.0 : 1.0);
-            col = mix(uWeatherA, uWeatherB, fract(s * 5.0));
-            alpha = leaves ? 0.8 : 0.6;
-          }
-        }
-      } else {
-        // summer: fireflies that blink where they are
-        float h = hash(cell + floor(uTime * 0.2) * 0.37);
-        if (h > 0.9978) {
-          idx = ${f(atlas.ramp[0])} + 7.0;
-          col = mix(uWeatherA, uWeatherB, fract(h * 37.0));
-          alpha = (0.5 + 0.5 * sin(uTime * 3.0 + h * 90.0)) * 0.8;
-        }
-      }
-    }
-
     // a scan front for transitions
     if (uSweep > 0.0 && uSweep < 1.0) {
       float y = 1.0 - suv.y;
@@ -559,13 +615,12 @@ export const asciiFragment = (atlas: {
     }
 
     if (ringHit > 0.04) {
-      if (alpha < 0.5 && ringHit > 0.28) {
-        float ang = mod(degrees(atan(ringDir.y, ringDir.x)) + 90.0, 180.0);
-        idx = ${f(atlas.edges)} + mod(floor(ang / 45.0 + 0.5), 4.0);
-        col = mix(vec3(1.0, 0.36, 0.18), vec3(1.0, 0.92, 0.84), ringHit);
-        alpha = ringHit;
+      if (alpha < 0.5 && ringHit > 0.15) {
+        idx = ${f(atlas.ramp[0])} + (ringHit > 0.6 ? 3.0 : 1.0);
+        col = mix(vec3(0.55, 0.53, 0.5), ${v3(fg)}, ringHit);
+        alpha = ringHit * 0.85;
       } else if (alpha > 0.0) {
-        col = mix(col, vec3(1.0, 0.6, 0.4), ringHit * 0.7);
+        col = mix(col, ${v3(fg)}, ringHit * 0.25);
       }
     }
 
@@ -587,12 +642,66 @@ export const asciiFragment = (atlas: {
     }
 
     if (idx < 0.0 || alpha <= 0.0) {
+      gl_FragColor = vec4(0.0, 0.0, 0.0, -1.0);
+      return;
+    }
+    col = mix(col, vec3(1.0), uFlash);
+    float strength = clamp(alpha * quiet, 0.0, 0.98);
+    gl_FragColor = vec4(col * strength, idx + strength * 0.5);
+  }
+`;
+
+/** the second step: per screen pixel, the glyph of its cell (see asciiCells) */
+export const asciiGlyphs = (tiles: number) => /* glsl */ `
+  precision highp float;
+  uniform sampler2D tCells;
+  uniform sampler2D tAtlas;
+  uniform vec2 uGrid;
+  uniform vec2 uCell;
+  uniform vec2 uOffset;
+  uniform float uImplode;
+  // a held click charging: x, y, ring radius (device px), progress 0..1
+  uniform vec4 uCharge;
+
+  void main() {
+    vec2 px = gl_FragCoord.xy - uOffset;
+    vec2 size = uGrid * uCell;
+    vec2 center = size * 0.5;
+
+    // implosion: the grid is pulled into the middle and twisted
+    if (uImplode > 0.0) {
+      vec2 rel = px - center;
+      float r = length(rel) / length(center);
+      float a = uImplode * (1.0 - r) * 4.0;
+      rel = mat2(cos(a), -sin(a), sin(a), cos(a)) * rel;
+      px = center + rel * (1.0 + uImplode * 3.0 * (1.0 - r * 0.6));
+    }
+
+    // a held click pulls the characters around it in, turning
+    if (uCharge.w > 0.0) {
+      vec2 rel = px - uCharge.xy;
+      float reach = uCharge.z * 3.2;
+      float k = clamp(1.0 - length(rel) / reach, 0.0, 1.0);
+      k = k * k * uCharge.w;
+      float a = k * 2.4;
+      rel = mat2(cos(a), -sin(a), sin(a), cos(a)) * rel;
+      px = uCharge.xy + rel * (1.0 + k * 1.6);
+    }
+
+    vec2 cell = floor(px / uCell);
+    if (cell.x < 0.0 || cell.y < 0.0 || cell.x >= uGrid.x || cell.y >= uGrid.y) {
       gl_FragColor = vec4(0.0);
       return;
     }
-    float g = glyph(idx, local);
-    col = mix(col, vec3(1.0), uFlash);
-    float a = g * alpha * quiet * (1.0 - uFlash * 0.0);
-    gl_FragColor = vec4(col * a, a);
+    vec4 c = texture2D(tCells, (cell + 0.5) / uGrid);
+    if (c.a < -0.5) {
+      gl_FragColor = vec4(0.0);
+      return;
+    }
+    float idx = floor(c.a);
+    float strength = fract(c.a) * 2.0;
+    vec2 local = fract(px / uCell);
+    float g = texture2D(tAtlas, vec2((idx + local.x) / ${f(tiles)}, local.y)).r;
+    gl_FragColor = vec4(c.rgb * g, g * strength);
   }
 `;

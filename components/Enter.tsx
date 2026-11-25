@@ -6,6 +6,7 @@ import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
 import { site } from "@/lib/site";
+import { designUnit } from "@/lib/unit";
 import { worldState } from "@/lib/world/state";
 
 /** where the zoom has filled the screen */
@@ -17,8 +18,8 @@ const START = 0.035;
 /**
  * Pinned. The name arrives as a speck and grows with every scroll step, an
  * exponential zoom so it never slows down, until the camera is inside the
- * crossing of the X and characters fill the screen. Then they fall away into
- * hyperspace and the work begins.
+ * crossing of the X and characters fill the screen. Then they fall away
+ * from the middle into hyperspace and the work begins.
  */
 export default function Enter() {
   const root = useRef<HTMLElement>(null);
@@ -39,10 +40,15 @@ export default function Enter() {
     let boosted = false;
     const offs: (() => void)[] = [];
 
+    // past the end nothing of the word is left: do not leave its last frame up
+    const settle = (p: number) => {
+      if (p >= 1) zoom?.gc.clear();
+    };
+
     const size = () => {
       if (!zoom) return;
       const w = window.innerWidth;
-      zoom.resize(w, window.innerHeight, w < 700 ? 6 : w > 1900 ? 8 : 7);
+      zoom.resize(w, window.innerHeight, w < 700 ? 6 : w > 1900 ? 8 * designUnit() : 7);
     };
 
     fontsReady().then(() => {
@@ -58,6 +64,7 @@ export default function Enter() {
         end: "bottom bottom",
         onUpdate: (self) => {
           progress = self.progress;
+          settle(progress);
         },
         onToggle: (self) => {
           visible = self.isActive;

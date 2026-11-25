@@ -29,10 +29,9 @@ export default function Privacy() {
 
       <h2>On your device</h2>
       <p>
-        Two entries are kept in your browser&apos;s local storage: which seasonal secrets you have found
-        (<code>plattnericus.seasons</code>) and the names of the other hidden things you have found
-        (<code>plattnericus.secrets</code>). They never leave your device and you can delete them at any time by
-        clearing the site data in your browser.
+        One entry is kept in your browser&apos;s local storage: the names of the hidden things you have found
+        (<code>plattnericus.secrets</code>). It never leaves your device and you can delete it at any time by clearing
+        the site data in your browser. The weather you pick is not stored at all; a reload clears it.
       </p>
 
       <h2>Camera and files</h2>

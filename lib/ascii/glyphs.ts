@@ -11,6 +11,8 @@ export const RAMP_FIRE = " .,:;+=xX$&#@";
 export const EDGES = "-/|\\";
 export const EDGE_LOW = "_";
 export const STARS = ".'+*";
+/** the N of Nexor Grid on its 5 x 7 modules, # where there is ink */
+export const N_MARK = ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"];
 export const NOISE = "#%&*+=-:;<>/\\|[]{}()?!$@0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export const ALL_GLYPHS = Array.from(

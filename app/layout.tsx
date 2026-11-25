@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
+import Seasons from "@/components/Seasons";
 import { author, projects, site } from "@/lib/site";
 import "./globals.css";
 
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to the projects
         </a>
         {children}
+        <Seasons />
       </body>
     </html>
   );

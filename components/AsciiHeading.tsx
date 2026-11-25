@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { AsciiTitle, type RevealMode } from "@/lib/ascii/ascii-title";
 import { family, fontsReady } from "@/lib/fonts";
 import { ScrollTrigger } from "@/lib/motion";
+import { site } from "@/lib/site";
 
 type Props = {
   text: string;
@@ -41,7 +42,7 @@ export default function AsciiHeading({
         align,
         uppercase,
         palette,
-        knockout: "#08080a",
+        knockout: site.colors.bg,
         label: false,
         reveal,
       });

@@ -8,9 +8,6 @@ export const C = {
   peach: "#f2a888",
   cream: "#f2ede6",
   ash: "#7d6f65",
-  paper: "#efe8dd",
-  ink: "#17110d",
-  inkSoft: "#5b4b40",
 } as const;
 
 export function hexToRgb(hex: string): [number, number, number] {

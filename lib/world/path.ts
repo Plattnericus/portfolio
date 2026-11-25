@@ -1,4 +1,4 @@
-import { Vector3 } from "three";
+import { MathUtils, Vector3 } from "three";
 import { SCREEN, Z } from "./shaders";
 
 /*
@@ -40,11 +40,33 @@ export function screenCenter(i: number): V3 {
   return [side * SCREEN.x, 0, Z.screens - i * Z.screenGap];
 }
 
-export function buildKeys(oX: number, projects: number): Key[] {
+/**
+ * How far the start camera stands from the wordmark. On wide screens the
+ * framing of the desktop layout; on narrow ones as close as lets the word
+ * fill about 92 % of the width, so it is never a thin strip on a phone.
+ * `span` is the wordmark's width in world units (from its letter centres).
+ */
+export function heroDistance(span: number, aspect = window.innerWidth / window.innerHeight) {
+  const k = frameScale(aspect);
+  const wide = 8.4 * k * (k > 1.01 ? 1.15 : 1);
+  if (aspect >= 1) return wide;
+  const tan = Math.tan(MathUtils.degToRad(25)) * fovFit(aspect);
+  const fill = span / 0.92 / (2 * tan * aspect);
+  return Math.min(wide, Math.max(6, fill));
+}
+
+/** the wordmark's width in world units, from its letter centres */
+export function wordSpan(centers: number[]) {
+  if (centers.length < 2) return 10;
+  const step = (centers[centers.length - 1] - centers[0]) / (centers.length - 1);
+  return centers[centers.length - 1] - centers[0] + step * 0.9;
+}
+
+export function buildKeys(oX: number, projects: number, span = 10): Key[] {
   const k = frameScale();
   const narrow = k > 1.01 ? 1.15 : 1;
   const defs: KeyDef[] = [
-    { sel: "#hero", at: 0, view: 0, pos: [0, 0.1, 8.4 * k * narrow], target: [0, 0, 0], fov: 50 },
+    { sel: "#hero", at: 0, view: 0, pos: [0, 0.1, heroDistance(span)], target: [0, 0, 0], fov: 50 },
     { sel: "#about", at: 0, view: 0.6, pos: [oX * 0.7, 0, 4.2], target: [oX, 0, -4], fov: 54 },
     { sel: "#about", at: 0, view: 0.22, pos: [oX, 0, 1.2], target: [oX, 0, -10], fov: 62, roll: 0.15 },
     { sel: "#about", at: 0, view: -0.05, pos: [oX * 0.6, 0.1, -6], target: [0, 0, -24], fov: 58, roll: 0.05 },
@@ -95,19 +117,22 @@ export function buildKeys(oX: number, projects: number): Key[] {
   // first contact key, or the turn to the @ starts under the list)
   defs.push({ sel: "#index", at: 1, view: 0.6, pos: [0, 0.6, -114], target: [-30, 6, -116], fov: 50, roll: 0.02 });
 
-  // contact: it turns back to the @, which waits top right, clear of the copy
-  defs.push({ sel: "#contact", at: 0, view: 0.2, pos: [1.6, -0.6, Z.at + 15 * k], target: [-3.2 / k, -1.6, Z.at], fov: 50 });
+  // contact: it turns back to the @ and faces it square on, the @ standing
+  // right of the copy (the camera is moved sideways, not turned, so the @ is
+  // never seen at an angle)
+  const ax = -3.3 / k;
+  defs.push({ sel: "#contact", at: 0, view: 0.2, pos: [ax, -1.1, Z.at + 15 * k], target: [ax, -1.1, Z.at], fov: 50 });
   defs.push({
     sel: "#contact",
     at: 1,
     view: 1,
-    pos: [3.4, -0.9, Z.at + 11 * k * narrow],
-    target: [-4.6 / k, -2.2 / k, Z.at],
+    pos: [ax * 1.05, -1.4 / k, Z.at + 12 * k * narrow],
+    target: [ax * 1.05, -1.4 / k, Z.at],
     fov: 50,
   });
 
   // footer: the camera tips up, away from the @, into open stars
-  defs.push({ sel: "#footer", at: 0, view: 0.6, pos: [3.4, -0.9, Z.at + 11 * k * narrow], target: [-4.6 / k, 4, Z.at], fov: 50 });
+  defs.push({ sel: "#footer", at: 0, view: 0.6, pos: [ax * 1.05, -1.4 / k, Z.at + 12 * k * narrow], target: [ax * 1.05, 4, Z.at], fov: 50 });
   defs.push({ sel: "#footer", at: 1, view: 1, pos: [3, 14, Z.at + 26], target: [-6, 90, Z.at - 20], fov: 52, roll: -0.04 });
 
   const sy = window.scrollY;

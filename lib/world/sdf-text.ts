@@ -60,7 +60,19 @@ export type TextField = {
   size: Vector2;
   /** centres of each character in world units (x), handy for flying through */
   centers: number[];
+  /** height of the set text in world units, centred on y = 0 */
+  height: number;
+  /**
+   * Where something falling would come to rest on the text: every place a
+   * letter begins, going down a column, as pairs of world x, y; the columns
+   * are `step` world units apart.
+   */
+  tops: Float32Array;
+  step: number;
 };
+
+/** how many columns across the text are looked at for its tops */
+const TOPS_ACROSS = 360;
 
 /**
  * Renders `text` centred into a w x h canvas, then turns it into a signed
@@ -108,6 +120,13 @@ export function textField(
     inside[i] = a ? 1 : 0;
     outside[i] = a ? 0 : 1;
   }
+  const tops: number[] = [];
+  const stepPx = Math.max(1, Math.round(w / TOPS_ACROSS));
+  for (let px = 0; px < w; px += stepPx) {
+    for (let py = 1; py < h; py++) {
+      if (inside[py * w + px] && !inside[(py - 1) * w + px]) tops.push(px, py);
+    }
+  }
   const dOut = edt(inside, w, h);
   const dIn = edt(outside, w, h);
   const scale = opts.worldWidth / w;
@@ -131,6 +150,9 @@ export function textField(
     texture: tex,
     size: new Vector2(opts.worldWidth, (opts.worldWidth * h) / w),
     centers: centersPx.map((c) => (c - w / 2) * scale),
+    height: (asc + desc) * s * scale,
+    tops: Float32Array.from(tops, (v, i) => (i % 2 ? (h / 2 - v) * scale : (v - w / 2) * scale)),
+    step: stepPx * scale,
   };
 }
 

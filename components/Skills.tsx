@@ -6,7 +6,8 @@ import { family, fontsReady } from "@/lib/fonts";
 import { prefersReducedMotion } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
 import { textInVaried } from "@/lib/scramble";
-import { skills } from "@/lib/site";
+import { skills, site } from "@/lib/site";
+import { FORMS } from "@/lib/world/shaders";
 import { pulse, worldState } from "@/lib/world/state";
 
 /** Pinned. The camera circles the object; every tool gives it a new shape. */
@@ -30,7 +31,7 @@ export default function Skills() {
       const first = active === -1;
       active = i;
       const s = skills[i];
-      worldState.morph = i;
+      worldState.morph = Math.max(0, FORMS.indexOf(s.shape));
       if (!reduced && !first) pulse(0.68, 0.5, 1.2);
       if (num) num.textContent = String(i + 1).padStart(2, "0");
       items.forEach((li, k) => {
@@ -47,7 +48,7 @@ export default function Skills() {
       title = new AsciiTitle(host, {
         fontFamily: family("mono"),
         displayFamily: family("display"),
-        knockout: "#08080a",
+        knockout: site.colors.bg,
         label: false,
         reveal: "vary",
       });
