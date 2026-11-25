@@ -1767,6 +1767,8 @@ main {
 .qt-foot .qt-text p {
   max-width: 40ch;
   font-size: clamp(15px, min(1.7vw, 2.7vh), calc(26 * var(--u)));
+  /* either line breaks into even halves, not a full line and a stub */
+  text-wrap: balance;
 }
 
 .qt-foot .qt-by {

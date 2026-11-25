@@ -12,7 +12,9 @@ type Mode = "type" | "sort";
 
 const MARK = ["#5a2416", "#8f3a22", "#c24a2a", "#ff5a2e", "#ff8a5e", "#ffc2a8"];
 /** how many quotes, from the start of the list, are set on the page */
-export const PLACED = 2;
+export const PLACED = 3;
+
+type Draw = readonly { index: number; weight: number }[];
 
 /**
  * A line worth keeping, between two sections. The quote mark is the site's
@@ -22,6 +24,7 @@ export const PLACED = 2;
  */
 export default function Quote({
   index,
+  draw,
   mode,
   section,
   scrub = true,
@@ -30,6 +33,8 @@ export default function Quote({
 }: {
   /** which of the quotes; left out, one at random */
   index?: number;
+  /** or one of these, drawn by weight on every visit */
+  draw?: Draw;
   mode: Mode;
   section: string;
   /** tie the words to the scroll, or play them once on arrival */
@@ -39,8 +44,10 @@ export default function Quote({
   id?: string;
 }) {
   const root = useRef<HTMLElement>(null);
-  // a random pick is made in the browser, or the server and the page disagree
-  const fixed = index === undefined ? null : quotes[index];
+  // a random pick is made in the browser, or the server and the page disagree;
+  // for a draw the HTML carries the likeliest line, so it is never empty
+  const at = draw ? heaviest(draw) : index;
+  const fixed = at === undefined ? null : quotes[at];
 
   useEffect(() => {
     const el = root.current;
@@ -49,15 +56,15 @@ export default function Quote({
     if (!el || !host || !out) return;
     // the ones with a place of their own on the page are not drawn again
     const pool = quotes.slice(PLACED);
-    const q = fixed ?? pool[Math.floor(Math.random() * pool.length)];
+    const q = draw ? quotes[drawn(draw)] : (fixed ?? pool[Math.floor(Math.random() * pool.length)]);
     if (!q) return;
     const text = q.text;
-    if (!fixed) {
-      const label = el.querySelector(".sr-only");
-      const by = el.querySelector(".qt-by");
-      if (label) label.textContent = text;
-      if (by) by.textContent = byline(q);
-    }
+    // the words are drawn from scratch below; the label and the name follow
+    // the pick every time (an earlier run may have set another)
+    const label = el.querySelector(".sr-only");
+    const by = el.querySelector(".qt-by");
+    if (label) label.textContent = text;
+    if (by) by.textContent = byline(q);
     const reduced = prefersReducedMotion();
     let mark: AsciiTitle | null = null;
     let alive = true;
@@ -173,7 +180,7 @@ export default function Quote({
       offs.forEach((f) => f());
       mark?.destroy();
     };
-  }, [fixed, mode, scrub]);
+  }, [fixed, draw, mode, scrub]);
 
   return (
     <section ref={root} id={id} className={`qt qt-${mode} ${className}`} data-section={section}>
@@ -191,6 +198,17 @@ export default function Quote({
       </figure>
     </section>
   );
+}
+
+function heaviest(draw: Draw) {
+  return draw.reduce((a, b) => (b.weight > a.weight ? b : a)).index;
+}
+
+/** one index, each as likely as its weight */
+function drawn(draw: Draw) {
+  let r = Math.random() * draw.reduce((sum, d) => sum + d.weight, 0);
+  for (const d of draw) if ((r -= d.weight) < 0) return d.index;
+  return draw[draw.length - 1].index;
 }
 
 function byline(q: { by: string; year?: number }) {

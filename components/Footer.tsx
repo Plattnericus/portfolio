@@ -10,7 +10,7 @@ import { onFrame, pointer, prefersReducedMotion, watchVisible } from "@/lib/loop
 import { scrollToTarget } from "@/lib/motion";
 import { bindHoverScramble } from "@/lib/scramble";
 import { SEASONS_EVENT, SHELL_EVENT, markSecret } from "@/lib/secrets";
-import { site } from "@/lib/site";
+import { footerQuotes, site } from "@/lib/site";
 
 const MARK = ["#3a2a22", "#6b4a3a", "#a8735a", "#e6a27f", "#ffd5bd", "#fff4ec"];
 
@@ -189,7 +189,7 @@ export default function Footer() {
 
   return (
     <footer ref={root} id="footer" className="ft" data-section="footer">
-      <Quote index={1} mode="sort" section="footer" scrub={false} className="qt-foot" />
+      <Quote draw={footerQuotes} mode="sort" section="footer" scrub={false} className="qt-foot" />
 
       <nav className="ft-tree" aria-label="elsewhere" data-quiet>
         <span className="ft-root">~/</span>

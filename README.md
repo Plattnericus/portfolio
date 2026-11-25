@@ -59,7 +59,7 @@ A 3D world you fly through by scrolling, drawn entirely in text characters.</p>
 
 Between and around the sections:
 
-- **Quotes.** One from Linus Torvalds sits between the work and the index, typed out as you scroll. The footer sorts its letters into its own line: "Make it work first. Beautiful software that doesn't run is just a screenshot."
+- **Quotes.** One from Linus Torvalds sits between the work and the index, typed out as you scroll. The footer sorts its letters into one of the site's own two lines, drawn on every visit: "Make it work first. Then you get to make it beautiful." (two visits in three) or "Make it work first. Beautiful software that doesn't run is just a screenshot."
 - **Ripples.** A click anywhere drops a small ripple into the characters.
 - **Cursor.** A block that inverts what is under it. It stays above everything, dialogs included, and steps aside only while the page scrolls.
 - **Hidden things.** Find one and a card slides in at the top right, like an advancement in a game: its icon in an inventory slot, how it was found, and a cell for every secret, the new one blinking. A short chime plays, synthesised on the spot (no audio file). The last one turns the card gold.
