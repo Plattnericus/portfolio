@@ -113,7 +113,7 @@ export default function Cinema() {
       video.src = p.clip;
       video.play().catch(() => undefined);
       reelStart = performance.now();
-      film.cut();
+      film.cut("static");
       setLabel(`reel  ${String(reelIndex + 1).padStart(2, "0")} / ${String(projects.length).padStart(2, "0")}  ${p.name}`);
     };
 

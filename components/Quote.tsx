@@ -12,7 +12,7 @@ type Mode = "type" | "sort";
 
 const MARK = ["#5a2416", "#8f3a22", "#c24a2a", "#ff5a2e", "#ff8a5e", "#ffc2a8"];
 /** how many quotes, from the start of the list, are set on the page */
-export const PLACED = 1;
+export const PLACED = 2;
 
 /**
  * A line worth keeping, between two sections. The quote mark is the site's

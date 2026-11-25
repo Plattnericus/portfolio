@@ -188,12 +188,14 @@ export const disciplines = ["interfaces", "backends", "servers", "security"];
 export type Quote = { text: string; by: string; year?: number };
 
 /**
- * Lines worth keeping. The first two have a place on the page (before the
- * contact and before the list of all projects); the footer draws one of the
- * others at random, `fortune` in the shell any of them.
+ * Lines worth keeping. The first two have a place on the page: the first
+ * between the work and the list of all projects, the second in the footer.
+ * `fortune` in the shell draws any of them.
  */
 export const quotes: Quote[] = [
   { text: "Talk is cheap. Show me the code.", by: "Linus Torvalds", year: 2000 },
+  // the footer's, and the site's own: make it work, then make it beautiful
+  { text: "Make it work first. Beautiful software that doesn't run is just a screenshot.", by: site.handle },
   { text: "Simplicity is prerequisite for reliability.", by: "Edsger W. Dijkstra", year: 1975 },
   { text: "The best way to predict the future is to invent it.", by: "Alan Kay", year: 1971 },
   { text: "Security is a process, not a product.", by: "Bruce Schneier", year: 2000 },
@@ -201,6 +203,10 @@ export const quotes: Quote[] = [
   { text: "Controlling complexity is the essence of computer programming.", by: "Brian Kernighan", year: 1976 },
   { text: "Make it work, make it right, make it fast.", by: "Kent Beck" },
   { text: "Real artists ship.", by: "Steve Jobs" },
+  // went round as an image in 2025 (first posted by @growthbyvisuals); no
+  // author has been found, the Elon Musk, Adam Grant and Shah Rukh Khan
+  // credits it picked up on the way have no source
+  { text: "Just make it exist first. You can make it good later.", by: "Unknown" },
   { text: "Any sufficiently advanced technology is indistinguishable from magic.", by: "Arthur C. Clarke", year: 1973 },
 ];
 

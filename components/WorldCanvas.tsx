@@ -50,6 +50,8 @@ export default function WorldCanvas() {
     const LIGHTSPEED = 2.5;
     const trail: { t: number; y: number }[] = [];
     let lightAt = -1e9;
+    // without a GPU: what the last drawn frame showed
+    let drawn = "";
     // only a scroll the visitor is doing counts, not a jump from a link
     let userAt = -1e9;
     const touched = () => (userAt = performance.now());
@@ -147,6 +149,8 @@ export default function WorldCanvas() {
       world.resize(window.innerWidth, window.innerHeight);
       await warm;
       if (disposed) return;
+      await world.prime();
+      if (disposed) return;
       rebuild();
       ScrollTrigger.addEventListener("refresh", rebuild);
       setWorld(world);
@@ -243,6 +247,25 @@ export default function WorldCanvas() {
             rects.push({ x: r.left - 28, y: r.top - 28, w: r.width + 56, h: r.height + 56 });
           });
           world.quiet = rects;
+        }
+
+        // without a GPU each frame is copied back on this thread; draw only
+        // what changed (easing included, it changes the numbers) or what
+        // still runs on its own (see World.moving)
+        if (world.software) {
+          const p = world.pose;
+          const q = world.quiet.map((r) => `${r.x | 0},${r.y | 0},${r.w | 0},${r.h | 0}`).join(";");
+          const now = [
+            window.innerWidth, window.innerHeight, world.hideText, worldState.covered,
+            p.pos.x, p.pos.y, p.pos.z, p.target.x, p.target.y, p.target.z, p.fov, p.roll,
+            pointer.moved ? Math.round(pointer.sx) : -1, pointer.moved ? Math.round(pointer.sy) : -1,
+            world.fx.flash, world.fx.implode, world.fx.warp, world.fx.sweep, world.rush / 100, world.morph,
+          ]
+            .map((v) => (typeof v === "number" ? v.toFixed(3) : String(v)))
+            .join(" ") + q;
+          const same = now === drawn && !world.moving;
+          drawn = now;
+          if (same) return;
         }
 
         world.render(time, dt, pointer.moved ? { x: pointer.sx, y: pointer.sy } : null);

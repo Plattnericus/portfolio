@@ -1,4 +1,5 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, HalfFloatType, LineBasicMaterial, LineSegments, Material, MathUtils, NearestFilter, PerspectiveCamera, Points, PointsMaterial, Scene, WebGLRenderTarget, WebGLRenderer } from "three";
+import { compileSoon } from "./compile";
 
 /*
  * The hyperspace field from the first version of the site, rebuilt for
@@ -173,7 +174,7 @@ export class Starfield {
   /** compiles both shaders for the target they draw into, without waiting on them */
   warm(renderer: WebGLRenderer) {
     renderer.setRenderTarget(this.target);
-    const done = renderer.compileAsync(this.scene, this.camera);
+    const done = compileSoon(renderer, this.scene, this.camera);
     renderer.setRenderTarget(null);
     return done;
   }

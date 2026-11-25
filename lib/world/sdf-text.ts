@@ -74,15 +74,19 @@ export type TextField = {
 /** how many columns across the text are looked at for its tops */
 const TOPS_ACROSS = 360;
 
+/** a fresh task, so a long job lets the page breathe between its steps */
+const nextTask = () => new Promise<void>((res) => setTimeout(res, 0));
+
 /**
  * Renders `text` centred into a w x h canvas, then turns it into a signed
- * distance field whose width maps to `worldWidth`.
+ * distance field whose width maps to `worldWidth`. Each step (raster, the
+ * two distance transforms, the encoding) runs in a task of its own.
  */
-export function textField(
+export async function textField(
   text: string,
   family: string,
   opts: { w?: number; h?: number; worldWidth: number; tracking?: number; fill?: number; weight?: number },
-): TextField {
+): Promise<TextField> {
   const weight = opts.weight ?? 900;
   const w = opts.w ?? 1024;
   const h = opts.h ?? 320;
@@ -131,11 +135,16 @@ export function textField(
       }
     }
   }
+  await nextTask();
   const dOut = edt(inside, w, h);
+  await nextTask();
   const dIn = edt(outside, w, h);
+  await nextTask();
   const scale = opts.worldWidth / w;
   const data = new Uint16Array(w * h);
   for (let py = 0; py < h; py++) {
+    // the encoding in two halves, it is as long as a transform
+    if (py === h >> 1) await nextTask();
     for (let px = 0; px < w; px++) {
       const i = py * w + px;
       const sd = (Math.sqrt(dOut[i]) - Math.sqrt(dIn[i])) * scale;

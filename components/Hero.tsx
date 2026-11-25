@@ -58,7 +58,7 @@ export default function Hero() {
           }}
         >
           <span className="hero-cue" aria-hidden="true">
-            <i>{":\n:\nv"}</i>
+            <i />
           </span>
         </a>
       </div>

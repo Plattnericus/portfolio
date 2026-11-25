@@ -11,6 +11,7 @@ const Weather = dynamic(() => import("@/components/Weather"), { ssr: false });
 const SeasonPicker = dynamic(() => import("@/components/SeasonPicker"), { ssr: false });
 
 const KONAMI = ["arrowup", "arrowup", "arrowdown", "arrowdown", "arrowleft", "arrowright", "arrowleft", "arrowright", "b", "a"];
+const MODIFIERS = ["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn", "AltGraph"];
 /** typed anywhere on the site: opens the picker */
 const PICKER_WORD = "season";
 
@@ -41,9 +42,12 @@ export default function Seasons() {
   useEffect(() => {
     const open = () => setPicking(true);
     const offs = [onTyped(PICKER_WORD, open), ...SEASONS.map((s) => onTyped(s, () => chooseSeason(s)))];
-    // the Konami code is keys, not letters, so it has its own listener
+    // the Konami code is keys, not letters, so it has its own listener. Shift
+    // (for a capital B or A), the other modifiers and a held key's repeats
+    // are not part of the code and must not break it
     let keys: string[] = [];
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || MODIFIERS.includes(e.key)) return;
       keys = [...keys, e.key.toLowerCase()].slice(-KONAMI.length);
       if (keys.join() !== KONAMI.join()) return;
       keys = [];

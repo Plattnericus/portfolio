@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import AsciiHeading from "@/components/AsciiHeading";
 import { VideoAscii } from "@/lib/ascii/video-ascii";
+import { retryVideo } from "@/lib/retry-video";
 import { hideCode, loadCode, noteRead, pickCode, showCode } from "@/lib/code-view";
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
@@ -67,6 +68,7 @@ export default function Index() {
       };
       video.addEventListener("loadedmetadata", skipIntro);
       offs.push(() => video.removeEventListener("loadedmetadata", skipIntro));
+      offs.push(retryVideo(video, () => play()));
       ro.observe(screen);
       offs.push(() => ro.disconnect());
 
@@ -111,10 +113,12 @@ export default function Index() {
           show(i);
           if (!wanted()) return;
           const snip = await pickCode(projects[i].slug);
-          if (!snip || !over) return;
+          if (!snip) return;
+          // asking for it counts as reading it, even if the cursor moved on first
+          noteRead(projects[i].slug);
+          if (!over) return;
           showCode(code, snip);
           label(`${fileOf(snip.path)}:${snip.start}`);
-          noteRead(projects[i].slug);
         };
         const off = () => {
           over = false;
@@ -169,7 +173,7 @@ export default function Index() {
               <span className="ix-kind muted">{p.kind}</span>
               <span className="ix-links">
                 {p.live ? (
-                  <a className="tl" href={p.live.href} target="_blank" rel="noreferrer" data-scramble>
+                  <a className="tl" href={p.live.href} target="_blank" rel="noreferrer" data-scramble aria-label={`live: ${p.name}`}>
                     <span data-label>live</span>
                   </a>
                 ) : null}
@@ -180,6 +184,7 @@ export default function Index() {
                   rel="noreferrer"
                   data-scramble
                   data-code=""
+                  aria-label={`code: ${p.name}`}
                 >
                   <span data-label>code</span>
                 </a>
@@ -190,7 +195,9 @@ export default function Index() {
         <figure className="ix-peek" aria-hidden="true" data-quiet>
           <div className="ix-screen">
             <canvas />
-            <video muted loop playsInline preload="none" tabIndex={-1} />
+            <video muted loop playsInline preload="none" tabIndex={-1}>
+              <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" default />
+            </video>
             <div className="code" />
           </div>
           <figcaption className="ix-cap muted">

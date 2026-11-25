@@ -189,18 +189,18 @@ export default function Footer() {
 
   return (
     <footer ref={root} id="footer" className="ft" data-section="footer">
-      <Quote mode="sort" section="footer" scrub={false} className="qt-foot" />
+      <Quote index={1} mode="sort" section="footer" scrub={false} className="qt-foot" />
 
       <nav className="ft-tree" aria-label="elsewhere" data-quiet>
         <span className="ft-root">~/</span>
-        <span className="ft-br">|--</span>
+        <span className="ft-br" aria-hidden="true">|--</span>
         <span className="ft-dir">contact/</span>
         <span className="ft-items">
           <a href={`mailto:${site.email}`} className="tl" data-scramble>
             <span data-label>{site.email}</span>
           </a>
         </span>
-        <span className="ft-br">|--</span>
+        <span className="ft-br" aria-hidden="true">|--</span>
         <span className="ft-dir">elsewhere/</span>
         <span className="ft-items">
           <a className="tl" href={site.github} target="_blank" rel="me noreferrer" data-scramble>
@@ -212,7 +212,7 @@ export default function Footer() {
             <span className="arrow">↗</span>
           </a>
         </span>
-        <span className="ft-br">|--</span>
+        <span className="ft-br" aria-hidden="true">|--</span>
         <span className="ft-dir">site/</span>
         <span className="ft-items">
           <Link className="tl" href="/privacy" data-scramble>
@@ -225,7 +225,7 @@ export default function Footer() {
             <span data-label>security.txt</span>
           </a>
         </span>
-        <span className="ft-br">`--</span>
+        <span className="ft-br" aria-hidden="true">`--</span>
         <span className="ft-dir">shell/</span>
         <span className="ft-items">
           <button type="button" className="tl ft-shell" onClick={() => window.dispatchEvent(new Event(SHELL_EVENT))}>

@@ -1,5 +1,6 @@
 import { CanvasTexture, Color, DataTexture, HalfFloatType, LinearFilter, MathUtils, Mesh, NearestFilter, NoBlending, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, Vector2, Vector3, Vector4, WebGLRenderTarget, WebGLRenderer } from "three";
 import { countGlyphs } from "../ascii/stats";
+import { compileSoon } from "./compile";
 import { site } from "../site";
 import { digitField, textField, type TextField } from "./sdf-text";
 import { fovFit } from "./path";
@@ -99,6 +100,22 @@ export class World {
   /** the old corridor of 3D screens; the projects play as 2D films now */
   screensOn = false;
   quiet: QuietRect[] = [];
+  /**
+   * WebGL without a GPU (SwiftShader, llvmpipe, a VM without acceleration).
+   * There the browser copies every frame back to the page's main thread, so
+   * the world draws only when something on it changes (see WorldCanvas).
+   */
+  readonly software: boolean;
+
+  /** the key light has caught up with the cursor (it eases after it) */
+  private lightDone = true;
+
+  /** something on screen is still running on its own clock: ripples, cuts, letters, a spin, a charge, the light */
+  get moving() {
+    return (
+      this.waves.length > 0 || this.cuts.length > 0 || this.letters !== null || this.spin !== 0 || this.charge.p > 0 || !this.lightDone
+    );
+  }
 
   constructor(canvas: HTMLCanvasElement, fontFamily: string) {
     this.fontFamily = fontFamily;
@@ -110,6 +127,7 @@ export class World {
       powerPreference: "high-performance",
     });
     this.renderer.setClearColor(0x000000, 0);
+    this.software = softwareGL(this.renderer.getContext());
     this.sceneRT = new WebGLRenderTarget(2, 2, {
       type: HalfFloatType,
       minFilter: NearestFilter,
@@ -242,35 +260,38 @@ export class World {
       mesh.frustumCulled = false;
       scene.add(mesh);
       r.setRenderTarget(target);
-      const done = r.compileAsync(scene, this.quadCam);
+      const done = compileSoon(r, scene, this.quadCam);
       r.setRenderTarget(null);
       return done;
     };
-    return Promise.all([
+    const all = Promise.all([
       into(this.sceneRT, this.sceneMat),
       into(this.cellsRT, this.asciiMat),
       into(null, this.glyphMat),
       this.stars.warm(r),
     ]);
+    // hand the compiles to the GPU process now, so it works on them while the
+    // fonts load; unflushed they would wait for the first draw, and without
+    // parallel compiling that draw would wait for all of them
+    r.getContext().flush();
+    return all;
   }
 
   /**
-   * Builds the distance fields; needs the display font loaded. The two
-   * fields are made in separate tasks, so neither holds the page for long.
+   * Builds the distance fields; needs the display font loaded. They are made
+   * step by step in separate tasks, so none holds the page for long.
    */
   async build(displayFont: string) {
-    const nextTask = () => new Promise<void>((res) => setTimeout(res, 0));
-    this.text = textField("NEXOR", displayFont, {
+    this.text = await textField("NEXOR", displayFont, {
       worldWidth: 12,
       w: 1400,
       h: 360,
       tracking: 0.02,
       fill: 0.9,
     });
-    await nextTask();
     // the @ from the mono face: its round, classic shape reads as an @ at
     // any angle; the display face's square one reads as a G in characters
-    const at = textField("@", this.fontFamily, { worldWidth: 6.4, w: 512, h: 512, fill: 0.86, weight: 800 });
+    const at = await textField("@", this.fontFamily, { worldWidth: 6.4, w: 512, h: 512, fill: 0.86, weight: 800 });
     const u = this.sceneMat.uniforms;
     u.tText.value = this.text.texture;
     // where each letter's slab of the field begins and ends, for moving them one by one
@@ -321,7 +342,8 @@ export class World {
   resize(width: number, height: number) {
     this.width = width;
     this.height = height;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // without a GPU every device pixel is drawn and copied by the CPU
+    this.dpr = this.software ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     this.renderer.setPixelRatio(this.dpr);
     this.renderer.setSize(width, height, false);
     // finer characters on phones, so the world keeps its detail on a small
@@ -426,8 +448,36 @@ export class World {
     return { x: p.pos.x + dir.x * t, y: p.pos.y + dir.y * t };
   }
 
-  /** pointer in css px, or null when there is none */
-  render(time: number, dt: number, pointer: { x: number; y: number } | null) {
+  /**
+   * Without a GPU the shaders are really built the first time they draw
+   * (SwiftShader compiles them then), and a frame on the canvas makes the
+   * page's main thread wait for that, well over a second. So the first frame
+   * is drawn while the canvas is hidden (a hidden canvas is not copied), and
+   * this resolves once the GPU process reports it done, polled without ever
+   * blocking.
+   */
+  async prime() {
+    const gl = this.renderer.getContext();
+    if (!this.software || !("fenceSync" in gl)) return;
+    // the compiles from warm() first: the first draw asks for their results
+    // and would otherwise sit and wait for them
+    await idle(gl);
+    // then one pass more each time, each in a task of its own, so no single
+    // task carries every program's first use and every texture upload
+    const canvas = this.renderer.domElement;
+    canvas.style.visibility = "hidden";
+    for (let upto = 1; upto <= 4; upto++) {
+      this.render(0, 0.016, null, upto);
+      await idle(gl);
+    }
+    canvas.style.visibility = "";
+  }
+
+  /**
+   * pointer in css px, or null when there is none; `upto` stops after that
+   * many of the four passes (scene, stars, cells, glyphs on the canvas)
+   */
+  render(time: number, dt: number, pointer: { x: number; y: number } | null, upto = 4) {
     const su = this.sceneMat.uniforms;
     const p = this.pose;
     const f = new Vector3().subVectors(p.target, p.pos).normalize();
@@ -454,6 +504,8 @@ export class World {
       .addScaledVector(f, -0.9)
       .normalize();
     this.light.lerp(target, 0.08);
+    // without a cursor the light circles on the clock, which is never done
+    this.lightDone = !pointer || this.light.distanceToSquared(target) < 1e-4;
     su.uLight.value.copy(this.light);
     // the point light floats a few units in front of the camera, under the cursor
     const lp = new Vector3()
@@ -502,10 +554,12 @@ export class World {
     this.renderer.clear();
     this.renderer.render(this.quadScene, this.quadCam);
     this.renderer.setRenderTarget(null);
+    if (upto < 2) return;
 
     // hyperspace: the field's camera matches the view's vertical fov
     const fovEff = MathUtils.radToDeg(2 * Math.atan(su.uTanFov.value));
     this.stars.update(this.renderer, Math.max(dt, 0.001), time, fovEff, this.rush, this.fx.warp);
+    if (upto < 3) return;
 
     const au = this.asciiMat.uniforms;
     au.uTime.value = time;
@@ -555,6 +609,7 @@ export class World {
     this.renderer.setRenderTarget(this.cellsRT);
     this.renderer.render(this.quadScene, this.quadCam);
     this.renderer.setRenderTarget(null);
+    if (upto < 4) return;
     this.quad.material = this.glyphMat;
     this.renderer.render(this.quadScene, this.quadCam);
     countGlyphs(this.cols * this.rows);
@@ -623,4 +678,29 @@ export class World {
     this.glyphMat.dispose();
     this.renderer.dispose();
   }
+}
+
+/** true when WebGL runs on the CPU: SwiftShader, llvmpipe and the like */
+function softwareGL(gl: WebGLRenderingContext | WebGL2RenderingContext) {
+  try {
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
+/** resolves once the GPU process has done everything asked of it so far, polled, never waited on */
+function idle(gl: WebGL2RenderingContext) {
+  const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+  return new Promise<void>((done) => {
+    const poll = () => {
+      if (sync && gl.getSyncParameter(sync, gl.SYNC_STATUS) !== gl.SIGNALED) return void setTimeout(poll, 30);
+      if (sync) gl.deleteSync(sync);
+      done();
+    };
+    setTimeout(poll, 30);
+  });
 }

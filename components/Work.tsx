@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AsciiTitle } from "@/lib/ascii/ascii-title";
 import { VideoAscii } from "@/lib/ascii/video-ascii";
+import { retryVideo } from "@/lib/retry-video";
 import { hideCode, loadCode, noteRead, pickCode, showCode } from "@/lib/code-view";
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
@@ -55,6 +56,13 @@ export default function Work() {
       const v = videos[i];
       if (v && !v.src) v.src = v.dataset.src ?? "";
     };
+    videos.forEach((v, k) =>
+      offs.push(
+        retryVideo(v, () => {
+          if (k === active && visible) v.play().catch(() => undefined);
+        }),
+      ),
+    );
 
     const setActive = (i: number) => {
       if (i === active) return;
@@ -85,7 +93,10 @@ export default function Work() {
           liveLabel.dataset.text = p.live.label;
         }
       }
-      if (source) source.href = p.source;
+      if (source) {
+        source.href = p.source;
+        source.setAttribute("aria-label", `source: ${p.name}`);
+      }
     };
 
     // the source link: the screen prints the code of the project on show
@@ -95,11 +106,13 @@ export default function Work() {
       const p = projects[active];
       if (!p || !code) return;
       const snip = await pickCode(p.slug);
-      if (!snip || !over || projects[active] !== p) return;
+      if (!snip) return;
+      // asking for it counts as reading it, even if the cursor moved on first
+      noteRead(p.slug);
+      if (!over || projects[active] !== p) return;
       reading = true;
       showCode(code, snip);
       if (file) file.textContent = `${snip.path.split("/").pop()}:${snip.start}`;
-      noteRead(p.slug);
     };
     const unread = () => {
       over = false;
@@ -215,7 +228,10 @@ export default function Work() {
         ))}
       </ul>
       {projects.map((p) => (
-        <video key={p.slug} data-src={p.clip} muted loop playsInline preload="none" tabIndex={-1} />
+        <video key={p.slug} data-src={p.clip} muted loop playsInline preload="none" tabIndex={-1}>
+          {/* the clips are silent; see the file */}
+          <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" default />
+        </video>
       ))}
       <div className="wk-pin">
         <div className="wk-film" aria-hidden="true">
@@ -250,7 +266,15 @@ export default function Work() {
               <span data-label>{first.live?.label}</span>
               <span className="arrow">↗</span>
             </a>
-            <a className="tl wk-source" href={first.source} target="_blank" rel="noreferrer" data-scramble data-code="">
+            <a
+              className="tl wk-source"
+              href={first.source}
+              target="_blank"
+              rel="noreferrer"
+              data-scramble
+              data-code=""
+              aria-label={`source: ${first.name}`}
+            >
               <span data-label>source</span>
               <span className="arrow">↗</span>
             </a>

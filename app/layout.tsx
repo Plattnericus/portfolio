@@ -66,9 +66,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/*
+ * A reload always starts at the top. Runs before the body is parsed, so the
+ * browser never gets to restore the old position (a useEffect is too late for
+ * that), and a #section in the address is dropped so it cannot jump either.
+ */
+const TOP = `try{history.scrollRestoration="manual";if(location.hash)history.replaceState(history.state,"",location.pathname+location.search);scrollTo(0,0)}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${mono.variable} ${display.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: TOP }} />
+      </head>
       <body>
         <a className="skip" href="#work">
           Skip to the projects

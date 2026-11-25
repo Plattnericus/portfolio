@@ -174,8 +174,11 @@ export default function Loader() {
       if (exiting || disposed) return;
       exiting = true;
       const p = plan();
-      // the wordmark appears behind the printed letters, in their places
-      if (world && p) {
+      // the wordmark appears behind the printed letters, in their places;
+      // without a GPU every frame of that flight would cost the page its
+      // main thread, so there it simply waits in its own place
+      if (world?.software) world.hideText = false;
+      else if (world && p) {
         world.letters = p.start;
         world.hideText = false;
       }
@@ -187,7 +190,7 @@ export default function Loader() {
           p.slots.forEach((slot, i) => {
             if (p.moves[i]) slot.style.transform = p.moves[i];
           });
-          fly3d(p.start, p.slots[0]);
+          if (!world?.software) fly3d(p.start, p.slots[0]);
         }, MERGE_DELAY_MS),
       );
       // the copy of the page comes in while the name settles

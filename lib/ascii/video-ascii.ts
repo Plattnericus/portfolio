@@ -23,6 +23,19 @@ const SN = SX * SY;
 /** levels per sample in the cache key: 8^6 entries */
 const Q = 8;
 
+/**
+ * A well-mixed hash of a cell and a tick, 0..1. Anything linear in the cell
+ * index (like i times the golden ratio) lines up along the grid's rows and
+ * prints as diagonal stripes; this one looks like static.
+ */
+function hash01(i: number, t: number) {
+  let h = Math.imul(i, 0x9e3779b1) ^ Math.imul(t + 0x632be5ab, 0x85ebca77);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
 type ShapeSet = { codes: Uint16Array; vec: Float32Array; cache: Int16Array };
 const shapeSets = new Map<string, ShapeSet>();
 
@@ -71,7 +84,8 @@ export type Picture = HTMLVideoElement | HTMLImageElement;
 
 /** how one picture hands over to the next */
 export type Cut = "static" | "wipe" | "iris" | "interlace" | "resolve" | "push";
-const CUTS: Cut[] = ["static", "wipe", "iris", "interlace", "resolve", "push"];
+/** the calm ones, picked at random; static only when asked for (the reel) */
+const CUTS: Cut[] = ["wipe", "iris", "interlace", "resolve", "push"];
 
 export class VideoAscii {
   readonly gc: GlyphCanvas;
@@ -103,6 +117,10 @@ export class VideoAscii {
   private lastColour = -1;
   /** something changed that the next frame has to draw (size, a cut, a picture still settling) */
   private stale = true;
+  /** a real picture has been drawn since the last resize, so there is one to hold */
+  private shown = false;
+  /** a cut is waiting for the next picture's first frame before it starts */
+  private waiting = false;
   /** draw the picture flipped, like a mirror */
   mirror = false;
   /** 0..1 cells replaced by character static, for cuts */
@@ -142,12 +160,16 @@ export class VideoAscii {
     this.outChars = new Uint16Array(n);
     this.outRgba = new Uint8ClampedArray(n * 4);
     this.cutMode = null;
+    this.waiting = false;
+    this.shown = false;
     this.stale = true;
   }
 
   /**
    * Hands over to whatever picture is rendered next, keeping the current
    * frame for the transition. Without a mode, a different one from last time.
+   * It starts when the next picture has a frame to show, not before: until
+   * then the current frame simply stays.
    */
   cut(mode?: Cut) {
     const pool = CUTS.filter((c) => c !== this.lastCut);
@@ -155,9 +177,13 @@ export class VideoAscii {
     this.lastCut = m;
     this.oldChars.set(this.cutMode ? this.outChars : this.chars);
     this.oldRgba.set(this.cutMode ? this.outRgba : this.rgba);
+    // a cut that interrupts a static cut takes its static away with it;
+    // left over, it would cover the film for good
+    this.noise = 0;
     this.cutMode = m;
     this.cutStart = performance.now();
     this.cutDur = m === "static" ? 450 : m === "resolve" ? 700 : 620;
+    this.waiting = this.shown;
   }
 
   /** mixes the kept frame and the new one for the running cut */
@@ -172,7 +198,8 @@ export class VideoAscii {
     const OR = this.oldRgba;
     const XC = this.outChars;
     const XR = this.outRgba;
-    const tick = (time * 24) | 0;
+    // the seam's glyphs change eight times a second: alive, not flickering
+    const tick = (time * 8) | 0;
     const block = Math.max(1, Math.round((1 - e) * 12));
     const maxD = Math.hypot(cols / 2, rows);
     for (let r = 0; r < rows; r++) {
@@ -301,10 +328,23 @@ export class VideoAscii {
     const L = this.lum;
     const subs = this.subs;
     const rgb = this.rgb;
-    const tick = (time * 20) | 0;
+    // the static's own clock: slow enough to read as grain, not as flicker
+    const slow = (time * 6) | 0;
     let have = false;
+    const ok = !!p && this.ready(p);
+    // static belongs to a running static cut and to nothing else
+    if (this.cutMode !== "static") this.noise = 0;
 
-    if (p && !this.cutMode && this.noise <= 0 && this.ready(p)) {
+    // a clip being switched or still buffering has no frame for a moment:
+    // the last one stays up (and a cut waits for the new one) instead of
+    // the screen dropping to its no-picture state
+    if (p && !ok && this.shown) return;
+    if (this.waiting) {
+      this.waiting = false;
+      this.cutStart = performance.now();
+    }
+
+    if (p && !this.cutMode && this.noise <= 0 && ok) {
       const key = p instanceof HTMLVideoElement ? p.currentTime : 0;
       if (!this.stale && p === this.lastPic && key === this.lastKey && this.colour === this.lastColour) return;
       this.lastPic = p;
@@ -313,7 +353,7 @@ export class VideoAscii {
       this.stale = false;
     } else this.lastPic = null;
 
-    if (p && this.ready(p)) {
+    if (p && ok) {
       const pw = p instanceof HTMLVideoElement ? p.videoWidth : p.naturalWidth;
       const ph = p instanceof HTMLVideoElement ? p.videoHeight : p.naturalHeight;
       // cover-crop to the grid's shape
@@ -337,6 +377,7 @@ export class VideoAscii {
       ctx.restore();
       const data = ctx.getImageData(0, 0, W, H).data;
       have = true;
+      this.shown = true;
 
       const hist = this.hist;
       hist.fill(0);
@@ -389,21 +430,30 @@ export class VideoAscii {
     const sharp = this.edges ? 1.6 : 1;
     for (let i = 0; i < n; i++) {
       const o = i * 4;
-      const r = ((i * 2654435761) >>> 0) / 4294967296;
-      if (!have || (this.noise > 0 && ((r * 7919 + tick * 0.37) % 1) < this.noise)) {
-        const k = (r * 1013 + tick * 0.618) % 1;
-        if (k < 0.5 || !have) {
-          if (!have && k > 0.92) {
-            chars[i] = "+:.*".charCodeAt((k * 40) & 3);
-            rgba[o] = rgba[o + 1] = rgba[o + 2] = 90;
-            rgba[o + 3] = 255;
-          } else {
-            chars[i] = 32;
-            rgba[o + 3] = 0;
-          }
+      // no picture yet: a still, sparse field of dots, nothing that flickers
+      if (!have) {
+        const k = hash01(i, 1);
+        if (k > 0.94) {
+          chars[i] = "+:.*".charCodeAt((hash01(i, 2) * 4) | 0);
+          rgba[o] = rgba[o + 1] = rgba[o + 2] = 90;
+          rgba[o + 3] = 255;
+        } else {
+          chars[i] = 32;
+          rgba[o + 3] = 0;
+        }
+        continue;
+      }
+      // a static cut: each cell has its own place in the order the static
+      // clears, so it dissolves away instead of flickering; what is still
+      // static changes six times a second
+      if (this.noise > 0 && hash01(i, 0) < this.noise) {
+        const k = hash01(i, slow + 7919);
+        if (k < 0.5) {
+          chars[i] = 32;
+          rgba[o + 3] = 0;
           continue;
         }
-        chars[i] = STATIC.charCodeAt(((r * 977 + tick * 13) | 0) % STATIC.length);
+        chars[i] = STATIC.charCodeAt((hash01(i, slow * 3 + 1) * STATIC.length) | 0);
         const g = 70 + k * 150;
         rgba[o] = g;
         rgba[o + 1] = g * 0.95;

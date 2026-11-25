@@ -9,6 +9,9 @@
   --fg: #efeae2;
   --dim: #8a847c;
   --faint: #34302c;
+  /* the faintest a word may be: 4.7:1 on the night, past WCAG AA; --faint is
+     for lines, rules and glyphs that only decorate */
+  --quiet: #807a72;
   --accent: #ff5a2e;
   /* a calmer warm, for things that fill and glow */
   --warm: #d97757;
@@ -113,6 +116,21 @@ button {
 
 canvas {
   display: block;
+}
+
+/* no blue flashes: not the tap highlight phones draw over a touched link,
+   nor the selection tint or drag ghost a canvas, picture or film gets when
+   a click or a gesture on the page catches it */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas,
+img,
+video {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .sr-only {
@@ -531,6 +549,11 @@ main {
   animation: cue 1.8s steps(6) infinite;
 }
 
+/* drawn by CSS, so the arrow is not read as the link's text ("fly in" is) */
+.hero-cue i::before {
+  content: ":\A:\Av";
+}
+
 .hero-down:hover .hero-cue i,
 .hero-down:focus-visible .hero-cue i {
   color: var(--accent);
@@ -608,7 +631,7 @@ main {
 
 .about-log i {
   font-style: normal;
-  color: var(--faint);
+  color: var(--quiet);
 }
 
 .about-log em {
@@ -697,15 +720,16 @@ main {
   list-style: none;
   font-size: var(--fs-s);
   line-height: 1.75;
-  color: var(--faint);
+  color: var(--quiet);
 }
 
 .sk-list li {
   transition: color 0.2s steps(3);
 }
 
+/* past tools a step brighter than the ones to come, the current one lit */
 .sk-list li.is-past {
-  color: var(--dim);
+  color: #b5aea4;
 }
 
 .sk-list li.is-on {
@@ -906,7 +930,7 @@ main {
 }
 
 .wk-bar {
-  color: var(--faint);
+  color: var(--quiet);
 }
 
 .wk-bar b {
@@ -1066,10 +1090,13 @@ main {
   }
   .ix-peek {
     display: block;
+  }
+  /* at rest only the screen dims; its caption stays readable (contrast) */
+  .ix-peek .ix-screen {
     opacity: 0.72;
     transition: opacity 0.3s steps(4);
   }
-  .ix-peek.is-hot {
+  .ix-peek.is-hot .ix-screen {
     opacity: 1;
   }
 }
@@ -1665,7 +1692,7 @@ main {
 }
 
 .ft-br {
-  color: var(--faint);
+  color: var(--quiet);
   white-space: pre;
 }
 
@@ -1694,7 +1721,7 @@ main {
 
 .ft-hint {
   font-size: var(--fs-s);
-  color: var(--faint);
+  color: var(--quiet);
   transition: color 0.3s steps(3);
 }
 
@@ -1773,6 +1800,8 @@ main {
   min-height: 0;
   height: 100%;
   border-top: 1px dashed var(--faint);
+  /* a sideways swipe on a phone reaches the water (a skipped stone) */
+  touch-action: pan-y;
 }
 
 /* short screens: the quote steps aside for the name, and its row goes with
@@ -1821,7 +1850,7 @@ main {
 
 .ct-hint-btn {
   font-size: var(--fs-s);
-  color: var(--faint);
+  color: var(--quiet);
   transition: color 0.3s steps(3);
 }
 
@@ -2018,12 +2047,13 @@ html.is-zen :is(main, footer, .nav) {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* above a phone's keyboard, and never taller than what it leaves */
+  bottom: var(--kb, 0px);
   z-index: 60;
-  height: min(46vh, 420px);
+  height: min(46vh, 420px, calc(var(--vv, 100vh) - 56px));
   display: grid;
-  grid-template-rows: 1fr auto;
-  padding: 1.6vh var(--pad) calc(1.6vh + env(safe-area-inset-bottom));
+  grid-template-rows: auto 1fr;
+  padding: 1.2vh var(--pad) calc(1.6vh + env(safe-area-inset-bottom));
   background: var(--bg);
   border-top: 1px solid var(--faint);
   font-size: var(--fs-s);
@@ -2031,19 +2061,73 @@ html.is-zen :is(main, footer, .nav) {
   cursor: text;
 }
 
+.sh-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 2ch;
+  margin-bottom: 1vh;
+  padding-bottom: 0.8vh;
+  border-bottom: 1px solid var(--faint);
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.sh-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sh-x {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sh-x:hover,
+.sh-x:focus-visible {
+  color: var(--accent);
+}
+
+/* scrolls like a terminal: wheel, touch, PgUp/PgDn, and a thin bar to drag */
 .sh-out {
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dim) transparent;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
+.sh-out::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sh-out::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sh-out::-webkit-scrollbar-thumb {
+  background: var(--faint);
+}
+
+.sh-out::-webkit-scrollbar-thumb:hover {
+  background: var(--dim);
+}
+
+/* output wraps between words where it can, so help and READMEs stay
+   readable on a phone; the line being typed wraps at the column */
 .sh-out p {
+  min-height: 1lh;
   margin: 0;
   white-space: pre-wrap;
-}
-
-.sh-in[hidden] {
-  display: none;
+  overflow-wrap: anywhere;
 }
 
 .sh-game {
@@ -2068,36 +2152,81 @@ html.is-zen :is(main, footer, .nav) {
   color: var(--fg);
 }
 
+/* the line being typed: prompt, text and the block, wrapping like any other line */
 .sh-in {
-  display: flex;
-  gap: 1ch;
-  align-items: baseline;
+  position: relative;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .sh-prompt {
   color: var(--accent);
-  white-space: pre;
 }
 
-.sh-in input {
-  flex: 1;
-  min-width: 0;
+.sh-line {
+  color: var(--fg);
+}
+
+.sh-cur {
+  background: var(--fg);
+  color: var(--bg);
+  animation: sh-blink 1.06s steps(1, end) infinite;
+}
+
+.sh-sel {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* without focus the block goes hollow, as in a terminal window in the background */
+.sh:not(.sh-focus) .sh-cur {
+  background: transparent;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px var(--fg);
+  animation: none;
+}
+
+@keyframes sh-blink {
+  50% {
+    background: transparent;
+    color: inherit;
+  }
+}
+
+/* the real input: invisible over the line. 16px so iOS does not zoom in on focus */
+.sh-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: 0;
   border: 0;
-  outline: none;
+  opacity: 0;
   background: transparent;
-  color: var(--fg);
-  font: inherit;
-  caret-color: var(--accent);
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+/* on touch it takes the taps itself, so the keyboard and paste work natively */
+@media (pointer: coarse) {
+  .sh-field {
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-cur {
+    animation: none;
+  }
 }
 
 @media (max-width: 720px) {
   .sh {
-    height: 58svh;
-  }
-  .sh-prompt {
-    max-width: 14ch;
-    overflow: hidden;
+    height: min(58svh, calc(var(--vv, 100svh) - 56px));
   }
 }
 
