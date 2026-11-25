@@ -63,9 +63,9 @@ export type TextField = {
   /** height of the set text in world units, centred on y = 0 */
   height: number;
   /**
-   * Where something falling would come to rest on the text: every place a
-   * letter begins, going down a column, as pairs of world x, y; the columns
-   * are `step` world units apart.
+   * Where something falling would come to rest on the text: the first place
+   * each column meets a letter (its outer top), as pairs of world x, y; the
+   * columns are `step` world units apart.
    */
   tops: Float32Array;
   step: number;
@@ -122,9 +122,13 @@ export function textField(
   }
   const tops: number[] = [];
   const stepPx = Math.max(1, Math.round(w / TOPS_ACROSS));
+  // only the outer top of each letter: the first place a column meets it
   for (let px = 0; px < w; px += stepPx) {
     for (let py = 1; py < h; py++) {
-      if (inside[py * w + px] && !inside[(py - 1) * w + px]) tops.push(px, py);
+      if (inside[py * w + px] && !inside[(py - 1) * w + px]) {
+        tops.push(px, py);
+        break;
+      }
     }
   }
   const dOut = edt(inside, w, h);

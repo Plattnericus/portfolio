@@ -56,7 +56,7 @@ A 3D world you fly through by scrolling, drawn entirely in text characters.</p>
 | **Footer** | One screen on every device: the links as a file tree, a quote, and the name mirrored in water in characters that ripples under the cursor. |
 | **404** | A black hole with a lensed accretion disk that slowly pulls the page in. |
 
-A quote from Linus Torvalds sits between the work and the index, typed out as you scroll; the footer draws another at random. A click anywhere drops a small ripple into the characters. Whatever you find that was hidden, a small card slides in at the top right with a short chime, synthesised on the spot (no audio file). The cursor is a block that inverts what is under it; it stays above everything, dialogs included, and steps aside only while the page scrolls.
+A quote from Linus Torvalds sits between the work and the index, typed out as you scroll; the footer draws another at random. A click anywhere drops a small ripple into the characters. Whatever you find that was hidden, a card slides in at the top right like an advancement in a game: the icon in an inventory slot, how it was found, and a cell for every secret, the new one blinking; with a short chime, synthesised on the spot (no audio file). The last one turns it gold. The cursor is a block that inverts what is under it; it stays above everything, dialogs included, and steps aside only while the page scrolls.
 
 ### The shell
 
@@ -213,7 +213,7 @@ You looked. There are 28. `secrets` in the shell counts the ones you have, and a
 <details>
 <summary><code>01</code> Season</summary>
 
-Type `season` anywhere on the page, on any page of the site. A picker opens with the four seasons, each a small landscape in pixel art; pick one with a click or 1 to 4. Its weather (snow, blossom, fireflies or falling leaves) then drifts over every page, a little of it settles on the letters, and it all stays until you reload. Typing `winter`, `spring`, `summer` or `autumn` switches it on straight away, 0 in the picker switches it off. On a phone, tap the last line of the footer five times. It works in the shell too.
+Type `season` anywhere on the page, on any page of the site. A picker opens with the four seasons, each a small living landscape in pixel art (a cabin with smoke in winter, a pond with butterflies in spring, a lake under the sunset in summer, a cabin among pumpkins in autumn); pick one with a click or 1 to 4. Its weather (snow, blossom, fireflies or falling leaves) drifts over every page with the scroll, settles on the name, the headlines and the frames, and stays until you reload. Typing `winter`, `spring`, `summer` or `autumn` switches it on straight away, 0 in the picker switches it off. On a phone, tap the last line of the footer five times. It works in the shell too.
 
 </details>
 <details>

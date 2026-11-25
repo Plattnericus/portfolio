@@ -1,5 +1,6 @@
 import { REST_PIXEL, WEATHER, type Season, type Settle } from "../seasons";
 import type { World } from "../world/world";
+import { Surfaces, type Ledge } from "./surfaces";
 
 /*
  * The season's weather over the page, as pixel art: snow, blossom, fireflies
@@ -22,9 +23,17 @@ const SPRITES: Record<Season, string[][]> = {
   ],
 };
 /** how often each sprite is picked, per season (same order as SPRITES) */
-const PICK: Record<Season, number[]> = { winter: [0.55, 0.33, 0.12], spring: [0.6, 0.4], summer: [1], autumn: [1, 0] };
+const PICK: Record<Season, number[]> = { winter: [0.5, 0.34, 0.16], spring: [0.6, 0.4], summer: [1], autumn: [1, 0] };
 /** css px of screen per particle: snow is the densest, fireflies are few */
-const AREA: Record<Season, number> = { winter: 11000, spring: 16000, summer: 28000, autumn: 18000 };
+const AREA: Record<Season, number> = { winter: 5600, spring: 13000, summer: 24000, autumn: 15000 };
+/**
+ * How much of the page's scroll each particle follows: far ones hardly, near
+ * ones almost fully, so the weather has depth and moves with the page rather
+ * than sticking to the screen.
+ */
+const PARALLAX: [number, number] = [0.25, 0.9];
+/** a slow wind that comes and goes: strength in px/s and how quickly it turns */
+const WIND = { strength: 14, turn: 0.13 };
 const FADE_IN = 0.9;
 /** seconds for what rests on the name to build up */
 const REST_BUILD = 3;
@@ -59,10 +68,14 @@ export class WeatherLayer {
   private kind: Season | null = null;
   private next: Season | null = null;
   private level = 0;
+  /** seconds since the layer started, for the wind */
+  private clock = 0;
   /** the 3D name, to lay the season on its letters, and how much has settled */
   private world: World | null = null;
   private tops = new Float32Array(4096);
   private rest = 0;
+  /** the page's own edges and lines of copy, where the season settles too */
+  private surfaces = new Surfaces();
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
@@ -102,6 +115,54 @@ export class WeatherLayer {
   }
 
   /**
+   * What has settled on the page's frames: a lumpy line of snow with its
+   * shaded underside, or single petals, leaves or resting fireflies along
+   * them. Every ledge keeps its own seed, so nothing
+   * shimmers while the page scrolls.
+   */
+  private drawLedges(settle: Settle, ledges: Ledge[], alpha: number) {
+    const { ctx } = this;
+    const P = REST_PIXEL;
+    const hash = (a: number, b: number) => ((((a * 73856093) ^ (b * 19349663)) >>> 0) % 10007) / 10007;
+    for (const l of ledges) {
+      const x0 = Math.round(l.x0 / P) * P;
+      const x1 = Math.round(l.x1 / P) * P;
+      // never lower than the edge, so it rests on it and not in it
+      const y0 = Math.floor(l.y / P) * P;
+      if (x1 - x0 < P) continue;
+      if (settle.cover >= 1) {
+        ctx.globalAlpha = alpha;
+        // a shaded row on the edge and snow above it, lumpy
+        ctx.fillStyle = settle.shade;
+        ctx.fillRect(x0, y0 - P, x1 - x0, P);
+        ctx.fillStyle = settle.color;
+        ctx.fillRect(x0, y0 - P * 2, x1 - x0, P);
+        // lumps: a pixel or two deeper here and there, more as it builds up
+        for (let x = x0; x < x1; x += P * 3) {
+          const n = Math.floor(hash((x - x0) / P, l.seed) * 3 * this.rest);
+          if (n > 0) ctx.fillRect(x, y0 - P * (2 + n), Math.min(P * 3, x1 - x), P * n);
+        }
+        continue;
+      }
+      for (let x = x0; x < x1; x += P * 4) {
+        const h = hash((x - x0) / P, l.seed);
+        if (h > settle.cover * this.rest) continue;
+        let a = alpha;
+        if (settle.glow) {
+          // a resting firefly glows on and off
+          a *= 0.25 + 0.75 * Math.max(0, Math.sin(this.clock * 1.7 + h * 60));
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = settle.color;
+        }
+        ctx.globalAlpha = a;
+        ctx.fillStyle = h < settle.cover * 0.5 ? settle.color : settle.shade;
+        ctx.fillRect(x, y0 - P, P, P);
+      }
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  /**
    * What has settled on the name: on every column of a letter's top, a
    * shaded pixel on the edge and white ones above, lumpy, growing as it
    * falls; or, where it covers less, a single petal or leaf here and there.
@@ -113,7 +174,7 @@ export class WeatherLayer {
     const P = REST_PIXEL;
     const width = Math.max(P, Math.ceil(tops.step / P) * P);
     const holes = tops.holes;
-    const rows = this.rest * 3;
+    const rows = this.rest * 4.5;
     ctx.globalAlpha = alpha;
     for (let i = 0; i < tops.count; i++) {
       const x = this.tops[i * 2];
@@ -159,7 +220,7 @@ export class WeatherLayer {
       x: Math.random() * this.w,
       y: anywhere ? Math.random() * this.h : -12,
       near,
-      scale: near > 0.55 ? 2 : 1,
+      scale: near > 0.8 ? 3 : near > 0.45 ? 2 : 1,
       sprite: keep?.sprite ?? sprite,
       vy: 0,
       vx: 0,
@@ -194,8 +255,11 @@ export class WeatherLayer {
   }
 
   /** one frame; dt in seconds. Returns false once nothing is left to draw */
-  frame(dt: number, still = false) {
+  frame(dt: number, still = false, scrolled = 0) {
     const { ctx, w, h, dpr } = this;
+    this.clock += dt;
+    // a slow, changing wind
+    const wind = WIND.strength * Math.sin(this.clock * WIND.turn) * Math.sin(this.clock * WIND.turn * 0.37 + 1.3);
     // fade towards the wanted weather, swapping once the old one is gone
     if (this.next !== this.kind) {
       this.level = Math.max(0, this.level - dt / FADE_OUT);
@@ -221,9 +285,16 @@ export class WeatherLayer {
           f.x = (f.x + f.vx * dt + w) % w;
           f.y = Math.max(h * 0.2, Math.min(h - 4, f.y + f.vy * dt));
         } else {
-          f.x += f.vx * dt;
-          f.y += f.vy * dt;
-          if (f.y > h + 12 || f.x < -40 || f.x > w + 40) Object.assign(f, this.spawn(kind, false, f));
+          f.x += (f.vx + wind * (0.4 + f.near)) * dt;
+          f.y += f.vy * dt - scrolled * (PARALLAX[0] + (PARALLAX[1] - PARALLAX[0]) * f.near);
+          // what leaves the screen comes back on the other side, so scrolling
+          // up or down never empties or crowds a part of it
+          if (f.y < -24) {
+            f.y += h + 36;
+            f.x = Math.random() * w;
+          } else if (f.y > h + 12) Object.assign(f, this.spawn(kind, false, f));
+          if (f.x < -40) f.x += w + 80;
+          else if (f.x > w + 40) f.x -= w + 80;
         }
       }
       let a = f.alpha * this.level;
@@ -250,7 +321,9 @@ export class WeatherLayer {
     if (settle) {
       this.rest = still ? 1 : Math.min(1, this.rest + dt / REST_BUILD);
       this.drawRest(settle, this.level);
+      this.drawLedges(settle, this.surfaces.update(scrolled), this.level);
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
     }
     return true;
   }

@@ -26,12 +26,19 @@ export default function Weather({ season }: { season: Season | null }) {
     size();
     window.addEventListener("resize", size);
     let last = 0;
+    // how far the page moved since the last frame: the weather follows it by
+    // depth; a jump of more than half a screen counts as half a screen
+    let scrollY = window.scrollY;
     const off = onFrame((t) => {
       if (still) return;
       const dt = last ? Math.min(0.05, t - last) : 0.016;
       last = t;
+      const y = window.scrollY;
+      const limit = window.innerHeight * 0.5;
+      const scrolled = Math.max(-limit, Math.min(limit, y - scrollY));
+      scrollY = y;
       w.setWorld(getWorld());
-      w.frame(dt);
+      w.frame(dt, false, scrolled);
     });
     return () => {
       off();

@@ -20,7 +20,7 @@ export const SEASONS: Season[] = ["winter", "spring", "summer", "autumn"];
  * colour, the shade on its underside, and how much of an edge it covers
  * (1: a closed line of snow; less: single petals or leaves).
  */
-export type Settle = { color: string; shade: string; cover: number };
+export type Settle = { color: string; shade: string; cover: number; glow?: boolean };
 
 /** css px per pixel of what rests on the letters */
 export const REST_PIXEL = 2;
@@ -39,7 +39,13 @@ export const WEATHER: Record<Season, { line: string; colors: string[]; chars: st
     chars: "*'`,",
     settle: { color: "#f7b6c8", shade: "#e88aab", cover: 0.22 },
   },
-  summer: { line: "fireflies", colors: ["#ffd36b", "#d9f27a", "#fff3a0"], chars: ".*+", settle: null },
+  summer: {
+    line: "fireflies",
+    colors: ["#ffd36b", "#d9f27a", "#fff3a0"],
+    chars: ".*+",
+    // a few fireflies resting on the edges, glowing on and off
+    settle: { color: "#e8ff8a", shade: "#c7e25a", cover: 0.07, glow: true },
+  },
   autumn: {
     line: "falling leaves",
     colors: ["#e8742a", "#f0b23a", "#c2502c", "#d9a441"],

@@ -43,15 +43,48 @@ const CARDS: Record<SecretId, { icon: [string, string, string]; line: string }> 
 };
 
 /** how long a card stays, and how many steps its progress bar has */
-const SHOW_MS = 4500;
+/** how each one is found, shown as a small tag on the card */
+const HOW: Record<SecretId, string> = {
+  season: "typed",
+  konami: "keys",
+  mirror: "shell",
+  reel: "shell",
+  drop: "drop",
+  singularity: "shell",
+  sudo: "shell",
+  specimen: "typed",
+  screensaver: "idle",
+  dotfile: "shell",
+  gravity: "click",
+  jump: "hold",
+  neofetch: "shell",
+  source: "hover",
+  fortune: "shell",
+  console: "console",
+  lightspeed: "scroll",
+  snake: "game",
+  sculptor: "cursor",
+  whirl: "cursor",
+  stone: "swipe",
+  vim: "shell",
+  coffee: "shell",
+  hello: "typed",
+  wave: "typed",
+  roll: "typed",
+  lights: "typed",
+  zen: "typed",
+};
+
+const SHOW_MS = 4800;
 const OUT_MS = 420;
-const BAR = 12;
 
 /**
  * When a secret is found, a small toast slides in at the top right, like an
- * advancement in a game: the secret's icon in its own box, "secret found",
- * its name, what it does, and how many of all there are now, with a short
- * chime. Several in a row queue up. It only exists while it is showing.
+ * advancement in a game: the secret's icon in an inventory slot, "secret
+ * found!", its name with a tag for how it was found, what it does, and a
+ * bar with a cell for every secret (the new one blinking), with a short
+ * chime and a gleam passing over it. The last one turns it gold. Several in
+ * a row queue up. It only exists while it is showing.
  * Also defines the function the console banner (Reveal) points to.
  */
 export default function Achievement() {
@@ -64,7 +97,9 @@ export default function Achievement() {
     const name = el.querySelector<HTMLElement>(".ach-name");
     const line = el.querySelector<HTMLElement>(".ach-line");
     const count = el.querySelector<HTMLElement>(".ach-count");
-    const bar = el.querySelector<HTMLElement>(".ach-bar");
+    const head = el.querySelector<HTMLElement>(".ach-title");
+    const tag = el.querySelector<HTMLElement>(".ach-tag");
+    const cells = el.querySelector<HTMLElement>(".ach-cells");
     const queue: SecretId[] = [];
     let busy = false;
     let timer = 0;
@@ -77,17 +112,24 @@ export default function Achievement() {
       }
       busy = true;
       const c = CARDS[id];
-      const n = foundSecrets().length;
-      const fill = Math.round((n / SECRETS.length) * BAR);
+      const found = foundSecrets();
+      const n = found.length;
+      const all = n >= SECRETS.length;
       if (icon) icon.textContent = c.icon.join("\n");
       if (name) name.textContent = id;
-      if (line) line.textContent = c.line;
+      if (tag) tag.textContent = HOW[id];
+      if (line) line.textContent = all ? "every hidden thing, found" : c.line;
+      if (head) head.textContent = all ? "all secrets found!" : "secret found!";
       if (count) count.textContent = `${String(n).padStart(2, "0")}/${SECRETS.length}`;
-      if (bar) bar.textContent = `${"#".repeat(fill)}${".".repeat(BAR - fill)}`;
+      if (cells) {
+        // a cell for every secret: found ones lit, the new one blinking
+        cells.innerHTML = SECRETS.map((s) => `<i class="${s === id ? "is-new" : found.includes(s) ? "is-found" : ""}"></i>`).join("");
+      }
+      el.classList.toggle("is-all", all);
       el.hidden = false;
       void el.offsetWidth;
       el.classList.add("is-on");
-      void chime();
+      void chime(all);
       if (name) scramble(name, { duration: 0.6, delay: 0.2, text: id });
       timer = window.setTimeout(() => {
         el.classList.remove("is-on");
@@ -123,17 +165,20 @@ export default function Achievement() {
 
   return (
     <div ref={ref} className="ach" role="status" aria-live="polite" hidden>
-      <pre className="ach-icon" aria-hidden="true" />
+      <div className="ach-slot" aria-hidden="true">
+        <pre className="ach-icon" />
+      </div>
       <div className="ach-text">
         <p className="ach-head">
-          <span>secret found</span>
+          <span className="ach-title">secret found!</span>
           <span className="ach-count" />
         </p>
-        <p className="ach-name" />
-        <p className="ach-line" />
-        <p className="ach-progress" aria-hidden="true">
-          [<span className="ach-bar" />]
+        <p className="ach-row">
+          <span className="ach-name" />
+          <span className="ach-tag" />
         </p>
+        <p className="ach-line" />
+        <p className="ach-cells" aria-hidden="true" />
       </div>
     </div>
   );

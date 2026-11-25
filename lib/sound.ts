@@ -10,6 +10,8 @@
 /** the notes, Hz: a rising fifth, then the octave as a shimmer */
 const NOTES = [784, 1175];
 const SHIMMER = 1568;
+/** the note added when every secret is found */
+const FANFARE = 1568;
 const VOLUME = 0.07;
 
 let ctx: AudioContext | null = null;
@@ -37,7 +39,8 @@ function tone(c: AudioContext, freq: number, at: number, length: number, gain: n
   osc.stop(at + length + 0.02);
 }
 
-export async function chime() {
+/** the chime; `all` adds a third, higher note, for the last secret */
+export async function chime(all = false) {
   if (muted || typeof window === "undefined") return;
   const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return;
@@ -49,6 +52,7 @@ export async function chime() {
     tone(ctx, NOTES[0], t, 0.32, VOLUME, "triangle");
     tone(ctx, NOTES[1], t + 0.11, 0.55, VOLUME, "triangle");
     tone(ctx, SHIMMER, t + 0.11, 0.4, VOLUME * 0.25, "sine");
+    if (all) tone(ctx, FANFARE, t + 0.24, 0.8, VOLUME, "triangle");
   } catch {
     // no audio: the card still shows
   }

@@ -5,8 +5,10 @@ import type { Season } from "../seasons";
  * of little things: a dithered sky with clouds, the sun, a ridge of far
  * trees, a winding path, a wooden fence, two trees framing the view, and
  * the season's own details (snow on everything, tulips, tall grass,
- * pumpkins). The still part is painted once; each frame copies it and draws
- * what falls on top. The canvas holds the real pixels (W x H) and is scaled
+ * pumpkins) and a little life: a cabin with a lit window and smoke from its
+ * chimney, twinkling stars, a pond with butterflies and birds, a lake that
+ * mirrors the sun. The still part is painted once; each frame copies it and
+ * draws what moves and falls on top. The canvas holds the real pixels (W x H) and is scaled
  * up by CSS with `image-rendering: pixelated`.
  */
 
@@ -105,6 +107,18 @@ function rng(seed: number) {
 
 type Mote = { x: number; y: number; phase: number; color: number; big: boolean };
 
+/** what moves in a scene besides what falls */
+type Life = {
+  smoke: { x: number; y: number; color: number } | null;
+  stars: { x: number; y: number; phase: number }[];
+  birds: { x: number; y: number; phase: number }[];
+  butterflies: { x: number; y: number; phase: number; color: number }[];
+  /** the sun's reflection on a lake: rows and the span of columns */
+  glint: { y0: number; y1: number; x0: number; x1: number } | null;
+};
+
+const SMOKE_PUFFS = 6;
+
 export class Landscape {
   private ctx: CanvasRenderingContext2D;
   private image: ImageData;
@@ -112,6 +126,8 @@ export class Landscape {
   private still = new Uint32Array(W * H);
   private look: Look;
   private motes: Mote[];
+  private life: Life = { smoke: null, stars: [], birds: [], butterflies: [], glint: null };
+  private clock = 0;
 
   constructor(canvas: HTMLCanvasElement, season: Season) {
     canvas.width = W;
@@ -278,6 +294,79 @@ export class Landscape {
       }
     }
 
+    // a lake along the horizon in summer, mirroring the sky and the sun
+    if (season === "summer") {
+      const water = L.sky.map(px).reverse();
+      for (let y = HORIZON; y < HORIZON + 6; y++) {
+        const k = (y - HORIZON) / 6;
+        for (let x = 0; x < W; x++) set(x, y, water[Math.min(water.length - 1, Math.floor(k * 2 + (dither(x, y) > 0.5 ? 1 : 0)))]);
+      }
+      const glow = px(L.sun.colors[1]);
+      for (let y = HORIZON + 1; y < HORIZON + 6; y += 2) {
+        const half = Math.round(L.sun.r * (1 - (y - HORIZON) / 8));
+        for (let x = L.sun.x - half; x <= L.sun.x + half; x++) set(x, y, glow);
+      }
+      this.life.glint = { y0: HORIZON + 1, y1: HORIZON + 5, x0: L.sun.x - L.sun.r, x1: L.sun.x + L.sun.r };
+    }
+
+    // a pond in spring, with the sky in it
+    if (season === "spring") {
+      const sky2 = px(L.sky[2]);
+      const sky3 = px(L.sky[3]);
+      const rim = px("#4f9a45");
+      const [cx, cy, rx, ry] = [26, H - 9, 13, 4];
+      for (let y = -ry - 1; y <= ry + 1; y++) {
+        for (let x = -rx - 1; x <= rx + 1; x++) {
+          const d = (x * x) / (rx * rx) + (y * y) / (ry * ry);
+          if (d <= 1) set(cx + x, cy + y, y < 0 && (x + y) % 5 === 0 ? sky3 : sky2);
+          else if (d <= 1.35) set(cx + x, cy + y, rim);
+        }
+      }
+      // two butterflies over the meadow, birds far off
+      this.life.butterflies = [
+        { x: 40, y: HORIZON + 8, phase: 0, color: px("#fff3b0") },
+        { x: 82, y: HORIZON + 12, phase: 2, color: px("#f48fb1") },
+      ];
+      this.life.birds = [
+        { x: 10, y: 20, phase: 0 },
+        { x: 18, y: 23, phase: 1.3 },
+      ];
+    }
+
+    // a cabin by the path: lit window, smoke from the chimney
+    if (season === "winter" || season === "autumn") {
+      const wall = px(season === "winter" ? "#6b4a3a" : "#7a4a2e");
+      const wallShade = px(season === "winter" ? "#4e3428" : "#5a3420");
+      const roof = px(season === "winter" ? "#eef3fc" : "#8a3a2a");
+      const roofShade = px(season === "winter" ? "#b5c7e6" : "#6a2a20");
+      const lit = px("#ffd36b");
+      const litDeep = px("#f0a040");
+      const [cx, base, cw, ch] = [86, HORIZON + 5, 18, 8];
+      // the walls, log by log
+      for (let y = base - ch; y < base; y++) for (let x = cx - cw / 2; x < cx + cw / 2; x++) set(x, y, (y - base) % 2 ? wall : wallShade);
+      // the roof, overhanging, snow or shingles
+      for (let k = 0; k < 7; k++) {
+        const y = base - ch - 1 - k;
+        for (let x = cx - cw / 2 - 2 + k; x < cx + cw / 2 + 2 - k; x++) set(x, y, k === 0 || (x + k) % 3 ? roof : roofShade);
+      }
+      // a window that glows, and the door
+      for (let y = base - 6; y < base - 2; y++) for (let x = cx - 6; x < cx - 2; x++) set(x, y, y === base - 4 || x === cx - 4 ? litDeep : lit);
+      for (let y = base - 6; y < base; y++) for (let x = cx + 2; x < cx + 5; x++) set(x, y, wallShade);
+      // the chimney, smoke rises from it
+      for (let y = base - ch - 9; y < base - ch - 3; y++) for (let x = cx + 4; x < cx + 6; x++) set(x, y, wallShade);
+      if (snow) for (let x = cx + 4; x < cx + 6; x++) set(x, base - ch - 10, snow);
+      this.life.smoke = { x: cx + 5, y: base - ch - 10, color: px(season === "winter" ? "#a89cc0" : "#b8a898") };
+    }
+
+    // stars in a winter evening sky
+    if (season === "winter") {
+      for (let k = 0; k < 16; k++) {
+        const x = Math.floor(r() * W);
+        const y = Math.floor(r() * 14);
+        if (Math.hypot(x - L.sun.x, y - L.sun.y) > L.sun.r + 4) this.life.stars.push({ x, y, phase: r() * Math.PI * 2 });
+      }
+    }
+
     // a wooden fence across the meadow, snowed on in winter
     const [wood, woodShade] = WOOD.map(px);
     const fy = HORIZON + 6;
@@ -383,10 +472,14 @@ export class Landscape {
   frame(dt: number) {
     const o = this.out;
     o.set(this.still);
+    this.clock += dt;
     const kind = this.look.fall.kind;
     const put = (x: number, y: number, c: number) => {
+      x = Math.round(x);
+      y = Math.round(y);
       if (x >= 0 && y >= 0 && x < W && y < H) o[y * W + x] = c;
     };
+    this.live(put);
     for (const m of this.motes) {
       m.phase += dt;
       if (kind === "firefly") {
@@ -423,5 +516,58 @@ export class Landscape {
       }
     }
     this.ctx.putImageData(this.image, 0, 0);
+  }
+
+  /** the scene's little life: smoke, stars, birds, butterflies, the glint on the lake */
+  private live(put: (x: number, y: number, c: number) => void) {
+    const t = this.clock;
+    const L = this.life;
+    const white = px("#ffffff");
+    const dimStar = px("#b9a8d8");
+    for (const s of L.stars) {
+      const b = Math.sin(t * 1.8 + s.phase);
+      if (b > -0.3) put(s.x, s.y, b > 0.6 ? white : dimStar);
+    }
+    if (L.smoke) {
+      // puffs rise, drift with the wind, grow and thin out
+      for (let k = 0; k < SMOKE_PUFFS; k++) {
+        const age = (t * 0.5 + k / SMOKE_PUFFS) % 1;
+        const x = L.smoke.x + age * 7 + Math.sin(age * 6 + k) * 1.2;
+        const y = L.smoke.y - age * 16;
+        const rad = age < 0.3 ? 0 : age < 0.7 ? 1 : 2;
+        if (age > 0.9) continue;
+        for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) if (dx * dx + dy * dy <= rad * rad) put(x + dx, y + dy, L.smoke.color);
+      }
+    }
+    const bird = px("#3a4a6a");
+    for (const b of L.birds) {
+      const x = ((b.x + t * 6) % (W + 20)) - 10;
+      const y = b.y + Math.sin(t * 1.2 + b.phase) * 1.5;
+      const up = Math.sin(t * 7 + b.phase) > 0;
+      put(x, y, bird);
+      put(x - 1, y + (up ? -1 : 0), bird);
+      put(x + 1, y + (up ? -1 : 0), bird);
+      put(x - 2, y + (up ? -1 : 1), bird);
+      put(x + 2, y + (up ? -1 : 1), bird);
+    }
+    for (const f of L.butterflies) {
+      const x = f.x + Math.sin(t * 0.7 + f.phase) * 8;
+      const y = f.y + Math.sin(t * 1.3 + f.phase * 2) * 3;
+      put(x, y, f.color);
+      if (Math.sin(t * 12 + f.phase) > 0) {
+        put(x - 1, y - 1, f.color);
+        put(x + 1, y - 1, f.color);
+      }
+    }
+    if (L.glint) {
+      // the sun sparkles on the water
+      const g = L.glint;
+      const spark = px("#fff6c8");
+      for (let k = 0; k < 4; k++) {
+        const x = g.x0 + Math.floor(((Math.sin(t * 3.1 + k * 7.3) + 1) / 2) * (g.x1 - g.x0));
+        const y = g.y0 + ((k * 2 + Math.floor(t * 2)) % (g.y1 - g.y0 + 1));
+        put(x, y, spark);
+      }
+    }
   }
 }

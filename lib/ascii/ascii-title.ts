@@ -71,6 +71,8 @@ const DEFAULT_PALETTE = ["#4a453f", "#7c766d", "#b3ada3", "#d9d3c9", "#efeae2", 
 
 /** where the top of a letter's glyph sits in its cell, as a share of the cell's height */
 const SETTLE_TOP = 0.16;
+/** seconds for what rests on the letters to appear, once they stand */
+const SETTLE_FADE = 1.2;
 
 /** character rows per line of type, and the smallest cell (font size, css px) for it */
 const ROWS_PER_LINE = 14;
@@ -117,6 +119,11 @@ export class AsciiTitle {
   private ro: ResizeObserver;
   /** what the season has left lying on the letters, if anything */
   private settle: Settle | null = null;
+  /** each line of type as rows of the grid: what settles lies only on its outer top */
+  private bands: [number, number][] = [];
+  /** how much of it shows, 0..1: it settles softly instead of appearing at once */
+  private settled = 0;
+  private settleOff: (() => void) | null = null;
   private offStore: () => void;
   private w = 0;
   private h = 0;
@@ -169,7 +176,8 @@ export class AsciiTitle {
     this.offStore = store.subscribe((s, prev) => {
       if (s.weather === prev.weather) return;
       this.settle = s.weather ? WEATHER[s.weather].settle : null;
-      if (this.shown && !this.off) this.draw(0);
+      this.settled = 0;
+      if (this.shown && !this.off) this.settleIn();
     });
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(host);
@@ -306,6 +314,15 @@ export class AsciiTitle {
       },
       Math.max(6, cell * 2.2),
     );
+    {
+      const bh = this.gc.rows * this.gc.ch;
+      const top = (bh - blockH) / 2;
+      const ch = this.gc.ch;
+      this.bands = lines.map((_, i) => {
+        const y = top + i * lineH;
+        return [Math.max(0, Math.floor(y / ch) - 1), Math.min(this.gc.rows - 1, Math.ceil((y + size * CAP) / ch))];
+      });
+    }
     const n = this.gc.cols * this.gc.rows;
     this.seeds = new Float32Array(n);
     this.seeds2 = new Float32Array(n);
@@ -374,6 +391,28 @@ export class AsciiTitle {
     return this.canvas;
   }
 
+  /** lets what rests on the letters appear softly, once they stand */
+  private settleIn() {
+    this.settleOff?.();
+    this.settleOff = null;
+    if (!this.settle || prefersReducedMotion()) {
+      this.settled = 1;
+      this.draw(0);
+      return;
+    }
+    const from = this.settled;
+    const start = performance.now();
+    this.settleOff = onFrame((t) => {
+      const k = Math.min(1, (performance.now() - start) / (SETTLE_FADE * 1000));
+      this.settled = from + (1 - from) * k;
+      if (!this.off) this.draw(t);
+      if (k >= 1) {
+        this.settleOff?.();
+        this.settleOff = null;
+      }
+    });
+  }
+
   setPalette(palette: string[]) {
     this.opts.palette = palette;
     this.gc.setPalette([...palette, C.terra]);
@@ -381,44 +420,48 @@ export class AsciiTitle {
   }
 
   /*
-   * What the season leaves on the letters, in small pixels: on the top of
-   * every column of a letter a shaded pixel row on the edge and white ones
-   * above, lumpy along the line; where it covers less (blossom, leaves),
-   * single pixels. Each cell decides by a fixed hash, so nothing flickers
-   * when the headline is drawn again.
+   * What the season leaves on the letters, in small pixels, only on their
+   * outer top: in every line of type, on the first cell of a letter each
+   * column meets. A shaded pixel row on the edge and white ones above,
+   * lumpy; where it covers less (blossom, leaves, fireflies), single pixels.
+   * Each cell decides by a fixed hash, so nothing flickers when the headline
+   * is drawn again.
    */
   private drawSettle(skip: (c: number, r: number) => boolean) {
     const s = this.settle;
     const { gc, lit } = this;
-    const { cells, count } = this.shape;
     const { cols, cw, ch, ctx, dpr } = gc;
     if (!s) return;
     const P = REST_PIXEL;
+    if (this.settled <= 0) return;
+    ctx.globalAlpha = this.settled;
     // where the top of a letter's glyph sits in its cell
     const top = ch * SETTLE_TOP;
     const rect = (x: number, y: number, w: number, h: number, color: string) => {
       ctx.fillStyle = color;
       ctx.fillRect(Math.round((gc.ox + x) * dpr), Math.round((gc.oy + y) * dpr), Math.ceil(w * dpr), Math.ceil(h * dpr));
     };
-    for (let k = 0; k < count; k++) {
-      const i = cells[k];
-      const c = i % cols;
-      const r = (i / cols) | 0;
-      if (r > 0 && lit[i - cols]) continue;
-      if (skip(c, r)) continue;
-      const h = (((i + 1) * 2654435761) >>> 0) / 4294967296;
-      const x = c * cw;
-      const y = r * ch + top;
-      if (s.cover < 1) {
-        if (h > s.cover) continue;
-        rect(x + Math.floor((h / s.cover) * Math.max(0, cw - P)), y - P, P, P, h < s.cover * 0.5 ? s.color : s.shade);
-        continue;
+    for (const [r0, r1] of this.bands) {
+      for (let c = 0; c < cols; c++) {
+        let r = r0;
+        while (r <= r1 && !lit[r * cols + c]) r++;
+        if (r > r1 || skip(c, r)) continue;
+        const i = r * cols + c;
+        const h = (((i + 1) * 2654435761) >>> 0) / 4294967296;
+        const x = c * cw;
+        const y = r * ch + top;
+        if (s.cover < 1) {
+          if (h > s.cover) continue;
+          rect(x + Math.floor((h / s.cover) * Math.max(0, cw - P)), y - P, P, P, h < s.cover * 0.5 ? s.color : s.shade);
+          continue;
+        }
+        // the shade on the edge, the snow above it, a pixel or two deeper here and there
+        const n = 1 + (h < 0.4 ? 1 : 0) + (h < 0.12 ? 1 : 0);
+        rect(x, y - P, cw, P, s.shade);
+        rect(x, y - P * (n + 1), cw, P * n, s.color);
       }
-      // the shade on the edge, the snow above it, a pixel deeper here and there
-      const n = 1 + (h < 0.35 ? 1 : 0);
-      rect(x, y - P, cw, P, s.shade);
-      rect(x, y - P * (n + 1), cw, P * n, s.color);
     }
+    ctx.globalAlpha = 1;
   }
 
   get collapsed() {
@@ -457,10 +500,12 @@ export class AsciiTitle {
     this.off = null;
     if (!animate || rapid || prefersReducedMotion()) {
       this.reveal = 1;
+      this.settled = 1;
       this.draw(0);
       this.opts.onReveal?.(1);
       return;
     }
+    this.settled = 0;
     if (this.opts.reveal === "vary") {
       const pool = MODES.filter((m) => m !== this.mode);
       this.mode = pool[(Math.random() * pool.length) | 0];
@@ -476,6 +521,7 @@ export class AsciiTitle {
       if (k >= 1) {
         this.off?.();
         this.off = null;
+        this.settleIn();
       }
     });
   }
@@ -740,6 +786,7 @@ export class AsciiTitle {
 
   destroy() {
     this.offStore();
+    this.settleOff?.();
     this.off?.();
     this.fallOff?.();
     this.lensOff?.();
