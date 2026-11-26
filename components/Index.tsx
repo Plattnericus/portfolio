@@ -196,7 +196,7 @@ export default function Index() {
           <div className="ix-screen">
             <canvas />
             <video muted loop playsInline preload="none" tabIndex={-1}>
-              <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" default />
+              <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" />
             </video>
             <div className="code" />
           </div>

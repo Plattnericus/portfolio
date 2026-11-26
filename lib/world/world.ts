@@ -95,6 +95,8 @@ export class World {
   private blank: DataTexture;
   private balls = Array.from({ length: 5 }, () => new Vector4());
   morph = 0;
+  /** how far the @ has dissolved before the footer, 0..1 */
+  atGone = 0;
   /** the old loading counter; off unless a scene asks for it (see buildDigits) */
   digits: [number, number, number] | null = null;
   /** the old corridor of 3D screens; the projects play as 2D films now */
@@ -160,8 +162,8 @@ export class World {
         uLightPos: { value: new Vector3() },
         tText: { value: this.blank },
         uTextSize: { value: new Vector2(1, 1) },
-        tAt: { value: this.blank },
-        uAtSize: { value: new Vector2(1, 1) },
+        uAtYaw: { value: 0 },
+        uAtGone: { value: 0 },
         tDigits: { value: this.blank },
         uDigitSlot: { value: new Vector2(1, 1) },
         uDigits: { value: new Vector3(0, 0, 0) },
@@ -289,9 +291,6 @@ export class World {
       tracking: 0.02,
       fill: 0.9,
     });
-    // the @ from the mono face: its round, classic shape reads as an @ at
-    // any angle; the display face's square one reads as a G in characters
-    const at = await textField("@", this.fontFamily, { worldWidth: 6.4, w: 512, h: 512, fill: 0.86, weight: 800 });
     const u = this.sceneMat.uniforms;
     u.tText.value = this.text.texture;
     // where each letter's slab of the field begins and ends, for moving them one by one
@@ -301,8 +300,6 @@ export class World {
     edges[c.length] = this.text.size.x / 2;
     u.uLetterCount.value = c.length;
     u.uTextSize.value.copy(this.text.size);
-    u.tAt.value = at.texture;
-    u.uAtSize.value.copy(at.size);
   }
 
   /** the 3D counter's digits, only built when something wants to show them */
@@ -536,6 +533,9 @@ export class World {
     this.updateCuts(time, pointer, f, r, up, su.uTanFov.value, aspect);
     su.uTilt.value.set(this.spin, 0);
     su.uMorph.value = this.morph;
+    // the @ turns to face the camera, so it is never seen at an angle
+    su.uAtYaw.value = Math.atan2(this.pose.pos.x, this.pose.pos.z - Z.at);
+    su.uAtGone.value = this.atGone;
     // the object turns to face the camera, with a slow sway
     su.uBlobSpin.value = Math.atan2(this.pose.pos.x, this.pose.pos.z - Z.blob) + Math.sin(time * 0.4) * 0.25;
     for (let i = 0; i < 5; i++) {

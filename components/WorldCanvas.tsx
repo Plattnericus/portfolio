@@ -200,6 +200,7 @@ export default function WorldCanvas() {
         }
 
         world.morph += (worldState.morph - world.morph) * 0.06;
+        world.atGone = reduced ? worldState.atGone : world.atGone + (worldState.atGone - world.atGone) * 0.25;
         // the cursor cuts through the name; every cut open at once is the
         // whole name carved up; circled three times, it spins
         world.cutting = worldState.flying && !reduced;

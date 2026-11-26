@@ -60,8 +60,8 @@ export const sceneFragment = /* glsl */ `
 
   uniform sampler2D tText;
   uniform vec2 uTextSize;
-  uniform sampler2D tAt;
-  uniform vec2 uAtSize;
+  uniform float uAtYaw;
+  uniform float uAtGone;
   uniform sampler2D tDigits;
   uniform vec2 uDigitSlot;
   uniform vec3 uDigits;
@@ -128,6 +128,34 @@ export const sceneFragment = /* glsl */ `
   float extrude(float d2, float z, float h) {
     vec2 w = vec2(d2, abs(z) - h);
     return min(max(w.x, w.y), 0.0) + length(max(w, 0.0));
+  }
+  float sdSeg2(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+  }
+  // the centre line of a ring of radius r, from angle a0 on through span
+  // (counterclockwise), with round ends
+  float sdArc2(vec2 p, float r, float a0, float span) {
+    float t = mod(atan(p.y, p.x) - a0, 6.2831853);
+    if (t <= span) return abs(length(p) - r);
+    vec2 e0 = r * vec2(cos(a0), sin(a0));
+    vec2 e1 = r * vec2(cos(a0 + span), sin(a0 + span));
+    return min(length(p - e0), length(p - e1));
+  }
+  // the @, drawn as strokes rather than taken from a font: a round a with
+  // its stem, a tail out to the right, and the big ring that starts there
+  // and runs all the way round, open at the lower right. Exact, so it reads
+  // the same on every machine and needs no texture.
+  #define AT_R 2.55
+  #define AT_W 0.42
+  #define AT_FOOT -0.78
+  float sdAt(vec2 p) {
+    float bowl = abs(length(p - vec2(-0.3, 0.0)) - 1.0);
+    float stem = sdSeg2(p, vec2(0.7, 1.0), vec2(0.7, AT_FOOT));
+    float a0 = asin(AT_FOOT / AT_R);
+    float tail = sdSeg2(p, vec2(0.7, AT_FOOT), vec2(AT_R * cos(a0), AT_FOOT));
+    float ring = sdArc2(p, AT_R, a0, 5.55);
+    return min(min(bowl, stem), min(tail, ring)) - AT_W;
   }
   // a cone through the slab, wide at the front: the walls face the camera
   // a little, so the hot cut stays visible. Not an exact distance; the
@@ -366,11 +394,13 @@ export const sceneFragment = /* glsl */ `
     // the at sign
     {
       vec3 q = p - vec3(0.0, 0.0, ZA);
-      // a slow sway, never far enough to lose the shape
-      q.xz *= rot(sin(uTime * 0.45) * 0.16);
-      q.yz *= rot(sin(uTime * 0.31) * 0.07);
-      float bx = sdBox(q, vec3(uAtSize * 0.5, 0.8));
-      float d = bx > 0.5 ? bx : extrude(field(tAt, uAtSize, q.xy) + 0.12, q.z, 0.45) - 0.12;
+      // turned to face the camera (uAtYaw), so it is always seen square on;
+      // only a breath of sway, never enough to show its sides
+      q.xz *= rot(uAtYaw + sin(uTime * 0.45) * 0.03);
+      q.yz *= rot(sin(uTime * 0.31) * 0.02);
+      float bx = sdBox(q, vec3(AT_R + AT_W + 0.2, AT_R + AT_W + 0.2, 0.8));
+      // a thin plate: seen square on, only its face shows, no inner walls
+      float d = bx > 0.5 ? bx : extrude(sdAt(q.xy) + 0.05, q.z, 0.12) - 0.05;
       if (d < res.x) res = vec2(d, 4.0);
     }
     return res;
@@ -409,10 +439,19 @@ export const sceneFragment = /* glsl */ `
       return;
     }
 
+    float m = h.y;
+    // the @ leaves before the footer comes in: cell by cell, at random,
+    // the lower ones first (uAtGone runs 0..1; the scene has 2x2 px a cell)
+    if (uAtGone > 0.0 && abs(m - 4.0) < 0.5) {
+      float key = hash(floor(gl_FragCoord.xy * 0.5)) * 0.75 + vUv.y * 0.25;
+      if (key < uAtGone * 1.01) {
+        gl_FragColor = vec4(0.0);
+        return;
+      }
+    }
     vec3 p = ro + rd * t;
     vec3 n = normalAt(p);
     vec3 v = -rd;
-    float m = h.y;
     // a point light that sits where the cursor points, plus the soft key
     vec3 toL = uLightPos - p;
     float dl = length(toL);

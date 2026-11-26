@@ -11,6 +11,8 @@ export const worldState = {
   covered: 0,
   /** extra camera roll in radians on top of the path (the `roll` secret) */
   roll: 0,
+  /** how far the @ has dissolved as the footer comes in, 0..1 (Contact) */
+  atGone: 0,
   /** extra hyperspace push (the shell's `warp`), decays by itself */
   boost: 0,
   /** bursts requested by sections, x/y in 0..1 (y down) */

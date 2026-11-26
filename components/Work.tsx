@@ -8,8 +8,10 @@ import { hideCode, loadCode, noteRead, pickCode, showCode } from "@/lib/code-vie
 import { family, fontsReady } from "@/lib/fonts";
 import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
-import { bindHoverScramble, textInVaried } from "@/lib/scramble";
-import { projects, site } from "@/lib/site";
+import { bindHoverScramble, scramble, textInVaried } from "@/lib/scramble";
+import { projects, site, type Project } from "@/lib/site";
+import { clearCount, countTo, fetchStats } from "@/lib/stats-view";
+import type { Stats } from "@/lib/stats";
 import { pulse } from "@/lib/world/state";
 
 const BAR = 32;
@@ -18,7 +20,8 @@ const BAR = 32;
  * Pinned. Every project plays as a large colour ASCII film; scrolling cuts
  * to the next one through a burst of character static while the camera keeps
  * flying through the stars behind. Over the source link, the screen prints
- * the project's real code instead.
+ * the project's real code instead. Under every project, its two live
+ * numbers (lib/stats.ts) count up as it arrives.
  */
 export default function Work() {
   const root = useRef<HTMLElement>(null);
@@ -43,6 +46,8 @@ export default function Work() {
     const rest = time?.querySelector<HTMLElement>("i");
     const file = section.querySelector<HTMLElement>(".wk-file");
     const code = section.querySelector<HTMLElement>(".wk-screen .code");
+    const statEls = Array.from(section.querySelectorAll<HTMLElement>(".wk-stat"));
+    let stats: Stats["projects"] | null = null;
     let reading = false;
     let lastBar = -1;
     const offs: (() => void)[] = [bindHoverScramble(section)];
@@ -63,6 +68,37 @@ export default function Work() {
         }),
       ),
     );
+
+    // the numbers of the project on show; their place is kept while they load
+    const showStats = (p: Project) => {
+      const list = stats?.[p.slug] ?? [];
+      statEls.forEach((el, k) => {
+        const s = list[k];
+        const value = el.querySelector<HTMLElement>("dd");
+        const label = el.querySelector<HTMLElement>("dt");
+        el.classList.toggle("is-empty", !s);
+        if (!value || !label) return;
+        if (!s) {
+          clearCount(value);
+          label.textContent = "\u00a0";
+          delete label.dataset.text;
+          return;
+        }
+        const text = s.label;
+        if (label.textContent !== text) {
+          if (reduced || !label.dataset.text) label.textContent = text;
+          else scramble(label, { text, duration: 0.5 });
+          label.dataset.text = text;
+        }
+        countTo(value, s.value, 0.15 + k * 0.12, s);
+      });
+    };
+    const getStats = () =>
+      fetchStats().then((s) => {
+        if (!alive || stats || !s) return;
+        stats = s.projects;
+        if (active >= 0) showStats(projects[active]);
+      });
 
     const setActive = (i: number) => {
       if (i === active) return;
@@ -85,6 +121,7 @@ export default function Work() {
       if (kind) textInVaried(kind, { text: p.kind, duration: 0.6 });
       if (desc) textInVaried(desc, { text: p.description, duration: 0.9, spread: 0.85 });
       if (tech) tech.textContent = p.tech.join(" / ");
+      showStats(p);
       if (live) {
         live.hidden = !p.live;
         if (p.live) live.href = p.live.href;
@@ -187,6 +224,8 @@ export default function Work() {
       setActive(0);
     });
 
+    // the numbers are asked for a screen ahead, so they are there on arrival
+    offs.push(watchVisible(section, (v) => v && getStats(), "100% 0px 100% 0px"));
     offs.push(
       watchVisible(
         section,
@@ -230,7 +269,7 @@ export default function Work() {
       {projects.map((p) => (
         <video key={p.slug} data-src={p.clip} muted loop playsInline preload="none" tabIndex={-1}>
           {/* the clips are silent; see the file */}
-          <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" default />
+          <track kind="captions" src="/clips/silent.vtt" srcLang="en" label="No sound" />
         </video>
       ))}
       <div className="wk-pin">
@@ -261,6 +300,14 @@ export default function Work() {
           <p className="wk-tech muted" aria-hidden="true">
             {first.tech.join(" / ")}
           </p>
+          <dl className="wk-stats" aria-hidden="true">
+            {[0, 1].map((k) => (
+              <div key={k} className="wk-stat is-empty">
+                <dt className="muted">{"\u00a0"}</dt>
+                <dd>{"\u00a0"}</dd>
+              </div>
+            ))}
+          </dl>
           <div className="wk-links">
             <a className="tl wk-live" href={first.live?.href ?? "#"} target="_blank" rel="noreferrer" data-scramble>
               <span data-label>{first.live?.label}</span>

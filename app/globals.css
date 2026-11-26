@@ -23,7 +23,7 @@
    * does not blow the type up just for being wide. Sizes that must keep
    * their proportions on big screens are written as multiples of it.
    */
-  --u: max(1px, min(100vw / 1920, 100vh / 1080));
+  --u: max(1px, min(100vw / 1920, 100svh / 1080));
 
   --pad: clamp(16px, 3vw, calc(52 * var(--u)));
   --fs: calc(14 * var(--u));
@@ -79,7 +79,7 @@ html.lenis body {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100svh;
   background: var(--night);
   color: var(--fg);
   font-family: var(--mono);
@@ -255,6 +255,7 @@ video::-webkit-media-controls-start-playback-button {
   position: fixed;
   inset: 0;
   width: 100vw;
+  /* the full screen, also behind a phone's toolbar */
   height: 100vh;
   pointer-events: none;
 }
@@ -459,7 +460,7 @@ main {
 .loader-glyph {
   margin: 0;
   font: inherit;
-  font-size: min(0.88vw, 1.9vh);
+  font-size: min(0.88vw, 1.9svh);
   font-weight: 700;
   line-height: 1;
   white-space: pre;
@@ -520,6 +521,7 @@ main {
 .hero {
   position: relative;
   height: 100vh;
+  height: 100svh;
   min-height: 520px;
 }
 
@@ -530,7 +532,7 @@ main {
   bottom: calc(var(--pad) * 0.7);
   display: grid;
   justify-items: center;
-  gap: 2.2vh;
+  gap: 2.2svh;
   font-size: var(--fs-s);
 }
 
@@ -610,18 +612,18 @@ main {
 
 .about {
   position: relative;
-  padding: 118vh var(--pad) 44vh;
+  padding: 118svh var(--pad) 44svh;
 }
 
 .about-title {
   width: min(48vw, calc(820 * var(--u)));
-  height: clamp(170px, 40vh, calc(380 * var(--u)));
+  height: clamp(170px, 40svh, calc(380 * var(--u)));
 }
 
 /* the build log next to the print */
 .about-log {
   display: inline-grid;
-  margin: 3.4vh 0 0;
+  margin: 3.4svh 0 0;
   font: inherit;
   font-size: var(--fs-s);
   line-height: 1.75;
@@ -676,7 +678,7 @@ main {
 @media (max-width: 720px) {
   .about-title {
     width: 100%;
-    height: 30vh;
+    height: 30svh;
   }
 }
 
@@ -686,13 +688,14 @@ main {
 
 .sk {
   position: relative;
-  height: 520vh;
+  height: 520svh;
 }
 
 .sk-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
 }
 
@@ -705,7 +708,7 @@ main {
 }
 
 .sk-num {
-  margin: 0 0 2vh;
+  margin: 0 0 2svh;
   font-size: var(--fs-s);
   white-space: pre;
 }
@@ -717,11 +720,11 @@ main {
 
 .sk-name {
   width: 100%;
-  height: clamp(120px, 27vh, calc(270 * var(--u)));
+  height: clamp(120px, 27svh, calc(270 * var(--u)));
 }
 
 .sk-note {
-  margin: 2vh 0 0;
+  margin: 2svh 0 0;
   font-size: var(--fs-s);
   white-space: pre;
 }
@@ -757,13 +760,13 @@ main {
 
 @media (max-width: 720px) {
   .sk-copy {
-    top: 16vh;
+    top: 16svh;
     transform: none;
     width: auto;
     right: var(--pad);
   }
   .sk-name {
-    height: 20vh;
+    height: 20svh;
   }
   .sk-list {
     display: none;
@@ -783,13 +786,14 @@ main {
 
 .pr {
   position: relative;
-  height: 400vh;
+  height: 400svh;
 }
 
 .pr-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
 }
 
@@ -802,7 +806,7 @@ main {
 }
 
 .pr-num {
-  margin: 0 0 2.4vh;
+  margin: 0 0 2.4svh;
   font-size: var(--fs-s);
   white-space: pre;
 }
@@ -814,11 +818,11 @@ main {
 
 .pr-title {
   width: min(100%, calc(1200 * var(--u)));
-  height: clamp(160px, 40vh, calc(400 * var(--u)));
+  height: clamp(160px, 40svh, calc(400 * var(--u)));
 }
 
 .pr-line {
-  margin: 2.6vh 0 0;
+  margin: 2.6svh 0 0;
   font-size: clamp(13px, 1vw, calc(16 * var(--u)));
   color: var(--dim);
 }
@@ -852,7 +856,7 @@ main {
     right: var(--pad);
   }
   .pr-title {
-    height: 30vh;
+    height: 30svh;
   }
   .pr-steps {
     display: none;
@@ -865,13 +869,14 @@ main {
 
 .en {
   position: relative;
-  height: 340vh;
+  height: 340svh;
 }
 
 .en-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
 }
 
@@ -900,7 +905,7 @@ main {
 
 .wk {
   position: relative;
-  height: 640vh;
+  height: 640svh;
 }
 
 .wk video {
@@ -915,6 +920,7 @@ main {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
@@ -925,7 +931,7 @@ main {
 
 .wk-film {
   justify-self: center;
-  width: min(100%, calc((100vh - 2 * var(--pad) - 150px) * 4 / 3));
+  width: min(100%, calc((100svh - 2 * var(--pad) - 150px) * 4 / 3));
 }
 
 .wk-screen {
@@ -938,7 +944,7 @@ main {
   display: flex;
   justify-content: space-between;
   gap: 2ch;
-  margin: 1.2vh 0 0;
+  margin: 1.2svh 0 0;
   font-size: var(--fs-s);
   white-space: pre;
   overflow: hidden;
@@ -967,7 +973,7 @@ main {
 }
 
 .wk-num {
-  margin: 0 0 2vh;
+  margin: 0 0 2svh;
   font-size: var(--fs-s);
   white-space: pre;
 }
@@ -979,11 +985,11 @@ main {
 
 .wk-name {
   width: 100%;
-  height: clamp(80px, 17vh, calc(170 * var(--u)));
+  height: clamp(80px, 17svh, calc(170 * var(--u)));
 }
 
 .wk-kind {
-  margin: 2vh 0 0.6em;
+  margin: 2svh 0 0.6em;
   font-size: var(--fs-s);
 }
 
@@ -993,8 +999,51 @@ main {
 }
 
 .wk-tech {
-  margin: 0 0 2.4vh;
+  margin: 0 0 2.4svh;
   font-size: var(--fs-s);
+}
+
+/* two live numbers, large, each over its caption; the place is kept while they load */
+.wk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2svh calc(64 * var(--u));
+  margin: 0 0 3svh;
+}
+
+.wk-stat {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.wk-stat.is-empty {
+  visibility: hidden;
+}
+
+.wk-stat dd {
+  width: max-content;
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(26px, 4.6svh, calc(48 * var(--u)));
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: pre;
+}
+
+.wk-stat dt {
+  margin: 0.8em 0 0;
+  font-size: var(--fs-s);
+  white-space: pre;
+}
+
+/* thousands separators: a real comma, from the mono face */
+.wk-stat dd i {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .wk-links {
@@ -1019,19 +1068,110 @@ main {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
     align-content: center;
-    gap: 3vh;
+    gap: 3svh;
   }
   .wk-film {
-    width: min(100%, calc(36vh * 4 / 3));
+    width: min(100%, calc(36svh * 4 / 3));
   }
   .wk-bar {
     display: none;
   }
   .wk-name {
-    height: 12vh;
+    height: 12svh;
   }
   .wk-more {
     display: none;
+  }
+  .wk-tech {
+    margin-bottom: 1.8svh;
+  }
+  .wk-stats {
+    gap: 0.8svh 40px;
+    margin-bottom: 2.2svh;
+  }
+  .wk-stat dd {
+    font-size: clamp(20px, 3.3svh, 30px);
+  }
+  .wk-stat dt {
+    margin-top: 0.4em;
+  }
+}
+
+/* short phones: the film gives up height so the copy and its numbers fit */
+@media (max-width: 820px) and (max-height: 760px) {
+  .wk-film {
+    width: min(100%, calc(29svh * 4 / 3));
+  }
+  .wk-name {
+    height: 10svh;
+  }
+  .wk-kind {
+    margin-top: 1.4svh;
+  }
+}
+
+@media (max-width: 820px) and (max-height: 600px) {
+  .wk-film {
+    width: min(100%, calc(25svh * 4 / 3));
+  }
+  .wk-pin {
+    gap: 2svh;
+  }
+  .wk-meta {
+    display: none;
+  }
+  .wk-num {
+    margin-bottom: 1.2svh;
+  }
+}
+
+/* phones on their side: film and copy side by side, as on a desktop */
+@media (max-width: 960px) and (max-height: 500px) and (orientation: landscape) {
+  .wk-pin {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: none;
+    align-content: normal;
+    gap: 4vw;
+    padding-bottom: var(--pad);
+  }
+  .wk-film {
+    width: min(100%, calc(58svh * 4 / 3));
+  }
+  .wk-meta {
+    display: none;
+  }
+  .wk-num {
+    margin-bottom: 1svh;
+  }
+  .wk-name {
+    height: 13svh;
+  }
+  .wk-kind {
+    margin-top: 1svh;
+  }
+  .wk-tech {
+    margin-bottom: 1.6svh;
+  }
+  .wk-stats {
+    margin-bottom: 2svh;
+  }
+  .wk-stat dd {
+    font-size: clamp(18px, 6.5svh, 26px);
+  }
+  .wk-more {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) and (max-height: 380px) and (orientation: landscape) {
+  .wk-num {
+    display: none;
+  }
+  .wk-name {
+    height: 11svh;
+  }
+  .wk-stat dt {
+    margin-top: 0.25em;
   }
 }
 
@@ -1041,13 +1181,13 @@ main {
 
 .ix {
   position: relative;
-  padding: 28vh var(--pad) 32vh;
+  padding: 28svh var(--pad) 32svh;
 }
 
 .ix-title {
   width: min(60vw, calc(980 * var(--u)));
-  height: clamp(80px, 16vh, calc(160 * var(--u)));
-  margin-bottom: 7vh;
+  height: clamp(80px, 16svh, calc(160 * var(--u)));
+  margin-bottom: 7svh;
 }
 
 .ix-list {
@@ -1061,7 +1201,7 @@ main {
   grid-template-columns: 4ch auto minmax(4ch, 1fr) auto auto;
   align-items: baseline;
   gap: 0 1.6ch;
-  padding: 1.1vh 0;
+  padding: 1.1svh 0;
   opacity: 0;
   transition: opacity 0.4s steps(4);
 }
@@ -1135,7 +1275,7 @@ main {
 }
 
 .ix-cap {
-  margin: 1vh 0 0;
+  margin: 1svh 0 0;
   font-size: var(--fs-s);
   white-space: pre;
 }
@@ -1518,7 +1658,7 @@ main {
 
 .qt {
   position: relative;
-  padding: 34vh var(--pad) 38vh;
+  padding: 34svh var(--pad) 38svh;
 }
 
 .qt-fig {
@@ -1581,7 +1721,7 @@ main {
 
 .qt-by {
   grid-column: 2;
-  margin-top: 3.2vh;
+  margin-top: 3.2svh;
   font-size: var(--fs-s);
   color: var(--dim);
 }
@@ -1592,7 +1732,7 @@ main {
   }
   .qt-mark {
     grid-row: auto;
-    margin-bottom: 2.4vh;
+    margin-bottom: 2.4svh;
   }
   .qt-by {
     grid-column: 1;
@@ -1605,13 +1745,14 @@ main {
 
 .ct {
   position: relative;
-  height: 170vh;
+  height: 170svh;
 }
 
 .ct-pin {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
 }
 
@@ -1620,7 +1761,7 @@ main {
   top: calc(var(--pad) + 50 * var(--u));
   left: var(--pad);
   width: min(46vw, calc(760 * var(--u)));
-  height: clamp(110px, 24vh, calc(230 * var(--u)));
+  height: clamp(110px, 24svh, calc(230 * var(--u)));
 }
 
 .ct-bottom {
@@ -1631,7 +1772,7 @@ main {
 }
 
 .ct-ask {
-  margin: 0 0 1.2vh;
+  margin: 0 0 1.2svh;
   font-size: var(--fs-s);
 }
 
@@ -1663,7 +1804,7 @@ main {
 .ct-actions {
   display: flex;
   gap: 2ch;
-  margin: 2vh 0 0;
+  margin: 2svh 0 0;
   font-size: var(--fs-s);
 }
 
@@ -1686,7 +1827,7 @@ main {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: clamp(12px, 3.6vh, calc(44 * var(--u)));
+  gap: clamp(12px, 3.6svh, calc(44 * var(--u)));
   /* clear of the fixed bar at the top */
   padding: calc(var(--pad) + 56 * var(--u)) var(--pad) calc(var(--pad) * 0.7);
   font-size: var(--fs-s);
@@ -1761,18 +1902,18 @@ main {
 
 .qt-foot .qt-mark {
   width: clamp(36px, 3.6vw, calc(60 * var(--u)));
-  height: clamp(50px, min(5.4vw, 8vh), calc(92 * var(--u)));
+  height: clamp(50px, min(5.4vw, 8svh), calc(92 * var(--u)));
 }
 
 .qt-foot .qt-text p {
   max-width: 40ch;
-  font-size: clamp(15px, min(1.7vw, 2.7vh), calc(26 * var(--u)));
+  font-size: clamp(15px, min(1.7vw, 2.7svh), calc(26 * var(--u)));
   /* either line breaks into even halves, not a full line and a stub */
   text-wrap: balance;
 }
 
 .qt-foot .qt-by {
-  margin-top: 1.6vh;
+  margin-top: 1.6svh;
 }
 
 /* the name, and the name again upside down in the water */
@@ -1862,7 +2003,7 @@ main {
 /* ------------------------------------------------------------------ */
 
 .ct-hint {
-  margin: 3vh 0 0;
+  margin: 3svh 0 0;
 }
 
 .ct-hint-btn {
@@ -2067,10 +2208,10 @@ html.is-zen :is(main, footer, .nav) {
   /* above a phone's keyboard, and never taller than what it leaves */
   bottom: var(--kb, 0px);
   z-index: 60;
-  height: min(46vh, 420px, calc(var(--vv, 100vh) - 56px));
+  height: min(46svh, 420px, calc(var(--vv, 100svh) - 56px));
   display: grid;
   grid-template-rows: auto 1fr;
-  padding: 1.2vh var(--pad) calc(1.6vh + env(safe-area-inset-bottom));
+  padding: 1.2svh var(--pad) calc(1.6svh + env(safe-area-inset-bottom));
   background: var(--bg);
   border-top: 1px solid var(--faint);
   font-size: var(--fs-s);
@@ -2082,8 +2223,8 @@ html.is-zen :is(main, footer, .nav) {
   display: flex;
   align-items: baseline;
   gap: 2ch;
-  margin-bottom: 1vh;
-  padding-bottom: 0.8vh;
+  margin-bottom: 1svh;
+  padding-bottom: 0.8svh;
   border-bottom: 1px solid var(--faint);
   color: var(--dim);
   white-space: nowrap;
@@ -2284,7 +2425,7 @@ html.is-zen :is(main, footer, .nav) {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 1.4vh var(--pad) calc(var(--pad) * 0.8);
+  padding: 1.4svh var(--pad) calc(var(--pad) * 0.8);
   background: var(--bg);
   display: flex;
   flex-wrap: wrap;
@@ -2325,7 +2466,7 @@ html.is-zen :is(main, footer, .nav) {
   z-index: 70;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 3vh;
+  gap: 3svh;
   padding: calc(var(--pad) + 10px) var(--pad) calc(var(--pad) * 0.8);
   background: var(--bg);
 }
@@ -2412,7 +2553,7 @@ html.is-zen :is(main, footer, .nav) {
 .legal {
   max-width: 68ch;
   margin: 0 auto;
-  padding: 16vh var(--pad) 12vh;
+  padding: 16svh var(--pad) 12svh;
 }
 
 .legal h1 {
@@ -2456,6 +2597,7 @@ html.is-zen :is(main, footer, .nav) {
 
 .lost {
   position: relative;
+  height: 100vh;
   height: 100svh;
   overflow: hidden;
   cursor: crosshair;
@@ -2469,10 +2611,10 @@ html.is-zen :is(main, footer, .nav) {
 .lost-copy {
   position: absolute;
   left: 6vw;
-  top: calc(25vh + 34vh + 3vh);
+  top: calc(25svh + 34svh + 3svh);
   display: grid;
   justify-items: start;
-  gap: 1.6vh;
+  gap: 1.6svh;
 }
 
 .lost-copy p {
@@ -2483,7 +2625,7 @@ html.is-zen :is(main, footer, .nav) {
 @media (max-aspect-ratio: 11 / 10) {
   .lost-copy {
     left: 8vw;
-    top: calc(12vh + 20vh + 2vh);
+    top: calc(12svh + 20svh + 2svh);
   }
 }
 

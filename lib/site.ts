@@ -54,6 +54,42 @@ export const site = {
 /** "Nexor / Plattnericus" */
 export const author = `${site.name} / ${site.handle}`;
 
+/**
+ * Where a live number under a project comes from. lib/stats.ts reads it
+ * again every few minutes, from the repo itself (over git, `repo` defaults
+ * to the project's `source`) or from a public endpoint; nothing needs a key.
+ * Patterns are regular expressions, matched line by line unless noted.
+ */
+export type StatSource =
+  /** non-blank lines of hand-written code across every repo of the project */
+  | { lines: true }
+  /** files whose path matches */
+  | { repo?: string; files: string }
+  /** every match of `count` in the files whose path matches `in` */
+  | { repo?: string; in: string; count: string }
+  /**
+   * numbers captured by `value` (over the whole file) in the files whose path
+   * matches `in`: the largest, or how many different ones there are
+   */
+  | { repo?: string; in: string; value: string; pick: "max" | "distinct"; scale?: number }
+  /** a field of a public JSON endpoint (a list counts its items; `a.b` reads nested); `when` must be true */
+  | { json: string; field: string; when?: string }
+  /** a number given by hand, for what no public source counts */
+  | { fixed: number };
+
+/**
+ * One number and its caption. Several sources are added up, and `times`
+ * multiplies the sum. `compact` prints 14.3k instead of 14,326; `suffix`
+ * follows the number (120+).
+ */
+export type ProjectStat = {
+  label: string;
+  from: StatSource | StatSource[];
+  times?: StatSource;
+  format?: "compact";
+  suffix?: string;
+};
+
 export type Project = {
   name: string;
   slug: string;
@@ -63,6 +99,8 @@ export type Project = {
   live: { href: string; label: string } | null;
   source: string;
   clip: string;
+  /** the two numbers under it, counted live (lib/stats.ts) */
+  stats: ProjectStat[];
   /** focus point of the 4:3 crop, 0..1 */
   focus?: [number, number];
   /**
@@ -91,6 +129,11 @@ export const projects: Project[] = [
       "https://github.com/bedchem/POKYH_IOS",
       "https://github.com/bedchem/POKYH_ANDROID",
     ],
+    // the school's own numbers, as on ryhox.dev: no public endpoint counts them
+    stats: [
+      { label: "students use it", from: { fixed: 120 }, suffix: "+" },
+      { label: "schools", from: { fixed: 10 }, suffix: "+" },
+    ],
     clip: "/clips/pokyh.mp4",
   },
   {
@@ -102,6 +145,11 @@ export const projects: Project[] = [
     live: { href: "https://fly.pokyh.com", label: "fly.pokyh.com" },
     source: "https://github.com/bedchem/fruit-fly-hub",
     code: { path: "src/neural/simulation.js", at: "  tick(h) {", lines: 13 },
+    stats: [
+      { label: "neurons", from: { in: "^src/neural/cnsMeta\\.js$", value: '"neuronsDrawn":\\s*(\\d+)', pick: "max" } },
+      // the measured synapses of the MaleCNS connectome, as the project states them
+      { label: "synapses", from: { in: "^README\\.md$", value: "([\\d.]+)M synapses", pick: "max", scale: 1e6 } },
+    ],
     clip: "/clips/fly_lab.mp4",
   },
   {
@@ -113,6 +161,11 @@ export const projects: Project[] = [
     live: { href: "https://threejs.plattnericus.dev", label: "threejs.plattnericus.dev" },
     source: "https://github.com/Plattnericus/Stargazer_Tree",
     code: { path: "lib/bonsai.ts", at: "export function bonsaiNodes", lines: 16 },
+    stats: [
+      // every stargazer of the repo is a house, counted by the site itself
+      { label: "houses", from: { json: "https://threejs.plattnericus.dev/api/stargazers", field: "stargazers", when: "live" } },
+      { label: "grass blades", from: { in: "^lib/quality\\.ts$", value: "grassBlades:\\s*([\\d_]+)", pick: "max" } },
+    ],
     clip: "/clips/threejs_portfolio.mp4",
   },
   {
@@ -127,6 +180,17 @@ export const projects: Project[] = [
     },
     source: "https://github.com/Plattnericus/StreamDeck",
     code: { path: "src/routes/apps/Terminal.jsx", at: "const normalizePath = (p) =>", lines: 17 },
+    stats: [
+      // every key with a text, in all three languages (de, en, it)
+      {
+        label: "translated strings",
+        from: { in: "^src/i18n/translations\\.js$", count: "(?<![\\w$'\"])[A-Za-z_$][\\w$]*\\s*:\\s*['\"`]" },
+      },
+      {
+        label: "terminal commands",
+        from: { in: "^src/routes/apps/Terminal\\.jsx$", count: "^ {6}[a-zA-Z][\\w-]*\\s*:\\s*(\\(|async\\b|function\\b)" },
+      },
+    ],
     clip: "/clips/streamdeck.mp4",
   },
   {
@@ -138,6 +202,15 @@ export const projects: Project[] = [
     live: { href: "https://magicmirror.plattnericus.dev", label: "magicmirror.plattnericus.dev" },
     source: "https://github.com/bedchem/Magic-Mirror",
     code: { path: "src/utils/handTracking.js", at: "const rotateNormalizedPoint", lines: 20 },
+    stats: [
+      // the joints the hand skeleton links up, for each hand it follows
+      {
+        label: "hand points tracked",
+        from: { in: "^src/components/HandTrackingService\\.jsx$", value: "\\[(\\d+),\\s*(\\d+)\\]", pick: "distinct" },
+        times: { in: "^src/components/HandTrackingService\\.jsx$", count: "^const [A-Z]+_HAND_INDEX = \\d+;" },
+      },
+      { label: "widgets", from: { files: "^src/components/widgets/[^/]+Widget\\.jsx$" } },
+    ],
     clip: "/clips/magicmirror.mp4",
   },
   {
@@ -149,6 +222,10 @@ export const projects: Project[] = [
     live: { href: "https://minesweeper.plattnericus.dev", label: "minesweeper.plattnericus.dev" },
     source: "https://github.com/bedchem/Minesweeper",
     code: { path: "src/minesweeper.js", at: "function floodReveal", lines: 15 },
+    stats: [
+      { label: "games played", from: { json: "https://minesweeper.plattnericus.dev/api/getGlobalStats", field: "totalGamesPlayed" } },
+      { label: "players", from: { json: "https://minesweeper.plattnericus.dev/api/getGlobalStats", field: "totalPlayers" } },
+    ],
     clip: "/clips/minesweeper.mp4",
   },
   {
@@ -159,6 +236,17 @@ export const projects: Project[] = [
     tech: ["Java", "Fabric"],
     live: { href: "https://modrinth.com/mod/projectile.preview", label: "modrinth" },
     source: "https://github.com/Ryhox/ProjectilePreview-Mod",
+    // a mod is measured by the people who play it: Modrinth and CurseForge together
+    stats: [
+      {
+        label: "downloads",
+        from: [
+          { json: "https://api.modrinth.com/v2/project/projectile.preview", field: "downloads" },
+          { json: "https://api.cfwidget.com/minecraft/mc-mods/projectile-preview", field: "downloads.total" },
+        ],
+        format: "compact",
+      },
+    ],
     code: {
       path: "src/client/java/dev/duels/projectilepreview/client/projectile/TrajectorySim.java",
       at: "for (int i = 1; i <= steps; i++)",
