@@ -4,7 +4,8 @@ import type { Project, StatSource } from "./site";
 
 /*
  * The two live numbers under every project, each configured in lib/site.ts
- * as a source this file knows how to read. Nothing here needs a key.
+ * as a source this file knows how to read. Only an endpoint that asks for
+ * one gets a key, from the server's environment.
  *
  * Repos are read over git's own wire protocol (what `git clone` speaks), not
  * through GitHub's REST API, so there is no API key and no API rate limit:
@@ -14,11 +15,12 @@ import type { Project, StatSource } from "./site";
  * lines of the hand-written source of every repo of a project; anything
  * generated, minified, vendored or translated is left out.
  *
- * Product numbers (games played, downloads, houses) come from public JSON
+ * Product numbers (games played, downloads, houses, users) come from JSON
  * endpoints of the projects themselves or of Modrinth.
  *
  * Served as /stats.json, rebuilt in the background at most every 15
- * minutes; the visitor's browser only ever asks this site.
+ * minutes. Numbers with a `refresh` are served apart as /live.json, read at
+ * most that often. The visitor's browser only ever asks this site.
  */
 
 export type Stat = { label: string; value: number; format?: "compact"; suffix?: string };
@@ -290,15 +292,20 @@ async function snapshot(r: Repo): Promise<Snapshot> {
   };
 }
 
-const snapshots = new Map<string, Promise<Snapshot>>();
-function repoAt(url: string) {
+/**
+ * What one count has fetched so far: each repo and each endpoint is asked
+ * once per count, and two counts running at once never share or clear it.
+ */
+type Run = { snapshots: Map<string, Promise<Snapshot>>; answers: Map<string, Promise<unknown>> };
+
+function repoAt(run: Run, url: string) {
   const r = repoOf(url);
   if (!r) throw new Error(`${url}: not a GitHub repo`);
   const key = `${r.owner}/${r.repo}`.toLowerCase();
-  let hit = snapshots.get(key);
+  let hit = run.snapshots.get(key);
   if (!hit) {
     hit = snapshot(r);
-    snapshots.set(key, hit);
+    run.snapshots.set(key, hit);
   }
   return hit;
 }
@@ -321,22 +328,27 @@ function countLines(data: Buffer) {
 }
 
 // --------------------------------------------------------------------------
-// public JSON endpoints, each asked once per run
+// JSON endpoints, each asked once per run
 // --------------------------------------------------------------------------
 
-const answers = new Map<string, Promise<unknown>>();
-function getJson(url: string) {
-  let hit = answers.get(url);
+type JsonSource = Extract<StatSource, { json: string }>;
+
+function getJson(run: Run, { json: url, key }: JsonSource) {
+  const id = key ? `${url} ${key.header} ${key.env}` : url;
+  let hit = run.answers.get(id);
   if (!hit) {
-    hit = fetch(url, {
-      headers: { "user-agent": UA, accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT),
-    }).then((res) => {
-      if (!res.ok) throw new Error(`${url}: ${res.status}`);
-      return res.json() as Promise<unknown>;
-    });
-    answers.set(url, hit);
+    const headers: Record<string, string> = { "user-agent": UA, accept: "application/json" };
+    // the key stays in here: never logged, never in an error, never sent on
+    const secret = key && process.env[key.env]?.trim();
+    if (key && !secret) hit = Promise.reject(new Error(`${url}: ${key.env} is not set`));
+    else {
+      if (key && secret) headers[key.header] = secret;
+      hit = fetch(url, { headers, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT) }).then((res) => {
+        if (!res.ok) throw new Error(`${url}: ${res.status}`);
+        return res.json() as Promise<unknown>;
+      });
+    }
+    run.answers.set(id, hit);
   }
   return hit;
 }
@@ -346,10 +358,10 @@ const field = (data: unknown, path: string) =>
 
 // --------------------------------------------------------------------------
 
-async function measure(p: Project, src: StatSource): Promise<number> {
+async function measure(run: Run, p: Project, src: StatSource): Promise<number> {
   if ("fixed" in src) return src.fixed;
   if ("json" in src) {
-    const data = await getJson(src.json);
+    const data = await getJson(run, src);
     if (src.when && field(data, src.when) !== true) throw new Error(`${src.json}: not live`);
     const v = field(data, src.field);
     const n = Array.isArray(v) ? v.length : v;
@@ -359,7 +371,7 @@ async function measure(p: Project, src: StatSource): Promise<number> {
   if ("lines" in src) {
     const all = await Promise.all(
       (p.codeFrom ?? [p.source]).map(async (url) => {
-        const repo = await repoAt(url);
+        const repo = await repoAt(run, url);
         const paths = repo.files.filter((f) => CODE.test(f.path) && !NOT_OURS.test(f.path)).map((f) => f.path);
         let total = 0;
         for (const data of (await repo.read(paths)).values()) total += countLines(data);
@@ -368,7 +380,7 @@ async function measure(p: Project, src: StatSource): Promise<number> {
     );
     return all.reduce((a, b) => a + b, 0);
   }
-  const repo = await repoAt(src.repo ?? p.source);
+  const repo = await repoAt(run, src.repo ?? p.source);
   if ("files" in src) {
     const re = new RegExp(src.files);
     return repo.files.filter((f) => re.test(f.path)).length;
@@ -391,54 +403,75 @@ async function measure(p: Project, src: StatSource): Promise<number> {
   return Math.round(max * (src.scale ?? 1));
 }
 
-const total = (p: Project, from: StatSource | StatSource[]) =>
-  Promise.all((Array.isArray(from) ? from : [from]).map((src) => measure(p, src))).then((parts) =>
+const total = (run: Run, p: Project, from: StatSource | StatSource[]) =>
+  Promise.all((Array.isArray(from) ? from : [from]).map((src) => measure(run, p, src))).then((parts) =>
     parts.reduce((a, b) => a + b, 0),
   );
 
-/** the last complete count, reused within the refresh window (a dev server asks on every request) */
+// --------------------------------------------------------------------------
+// two sets: counted (/stats.json) and live (/live.json, `refresh`)
+// --------------------------------------------------------------------------
+
+export type Kind = "counted" | "live";
+type Count = { stats: Stats; failed: string[] };
+
+/** seconds between two reads of the live numbers: the shortest `refresh`, or 0 */
+export function liveEvery(list: Project[]) {
+  const all = list.flatMap((p) => p.stats.flatMap((s) => (s.refresh ? [s.refresh] : [])));
+  return all.length ? Math.max(1, Math.min(...all)) : 0;
+}
+
+/** a counted set is reused for 15 minutes (a dev server asks on every request) */
 const FRESH_MS = 15 * 60 * 1000;
-let last: { at: number; list: Project[]; result: Promise<{ stats: Stats; failed: string[] }> } | null = null;
+const kept: Partial<Record<Kind, { at: number; list: Project[]; result: Promise<Count> }>> = {};
+/** the last value read of every live number, for a read that fails */
+const lastLive = new Map<string, Stat>();
 
 /**
- * Every project's numbers. A number that cannot be counted right now is
- * left out rather than guessed; `failed` lists them.
+ * Every project's numbers of one kind. A counted number that cannot be read
+ * right now is left out rather than guessed; a live one keeps the last value
+ * this server read. `failed` lists both.
  */
-export function loadStats(list: Project[]) {
-  if (last && last.list === list && Date.now() - last.at < FRESH_MS) return last.result;
-  const result = count(list);
-  last = { at: Date.now(), list, result };
-  // only a complete count is kept
-  result.then(
-    (r) => r.failed.length && last?.result === result && (last = null),
-    () => last?.result === result && (last = null),
-  );
+export function loadStats(list: Project[], kind: Kind = "counted") {
+  const fresh = kind === "live" ? liveEvery(list) * 1000 : FRESH_MS;
+  const hit = kept[kind];
+  if (hit && hit.list === list && Date.now() - hit.at < fresh) return hit.result;
+  const result = count(list, kind);
+  const entry = { at: Date.now(), list, result };
+  kept[kind] = entry;
+  const drop = () => kept[kind] === entry && delete kept[kind];
+  // a counted set is only kept when complete; a failed live read waits its
+  // turn like any other, so a broken endpoint is not asked on every request
+  result.then((r) => kind === "counted" && r.failed.length && drop(), drop);
   return result;
 }
 
-async function count(list: Project[]) {
-  snapshots.clear();
-  answers.clear();
+async function count(list: Project[], kind: Kind): Promise<Count> {
+  const run: Run = { snapshots: new Map(), answers: new Map() };
   const failed: string[] = [];
   const entries = await Promise.all(
     list.map(async (p) => {
+      const wanted = p.stats.filter((s) => !!s.refresh === (kind === "live"));
+      if (!wanted.length) return null;
       const got = await Promise.all(
-        p.stats.map(async (s): Promise<Stat | null> => {
+        wanted.map(async (s): Promise<Stat | null> => {
+          const id = `${p.slug}/${s.label}`;
           try {
-            const [sum, times] = await Promise.all([total(p, s.from), s.times ? total(p, s.times) : 1]);
+            const [sum, times] = await Promise.all([total(run, p, s.from), s.times ? total(run, p, s.times) : 1]);
             const stat: Stat = { label: s.label, value: sum * times };
             if (s.format) stat.format = s.format;
             if (s.suffix) stat.suffix = s.suffix;
+            if (kind === "live") lastLive.set(id, stat);
             return stat;
           } catch (e) {
-            failed.push(`${p.slug}/${s.label}: ${e instanceof Error ? e.message : String(e)}`);
-            return null;
+            failed.push(`${id}: ${e instanceof Error ? e.message : String(e)}`);
+            return kind === "live" ? (lastLive.get(id) ?? null) : null;
           }
         }),
       );
       return [p.slug, got.filter((s): s is Stat => !!s)] as const;
     }),
   );
-  const stats: Stats = { at: new Date().toISOString(), projects: Object.fromEntries(entries) };
-  return { stats, failed };
+  const projects = Object.fromEntries(entries.filter((e) => e !== null));
+  return { stats: { at: new Date().toISOString(), projects }, failed };
 }

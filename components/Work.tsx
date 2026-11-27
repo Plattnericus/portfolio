@@ -10,8 +10,8 @@ import { onFrame, prefersReducedMotion, watchVisible } from "@/lib/loop";
 import { ScrollTrigger } from "@/lib/motion";
 import { bindHoverScramble, scramble, textInVaried } from "@/lib/scramble";
 import { projects, site, type Project } from "@/lib/site";
-import { clearCount, countTo, fetchStats } from "@/lib/stats-view";
-import type { Stats } from "@/lib/stats";
+import { clearCount, countTo, fetchLive, fetchStats, mergeStats, refreshOf } from "@/lib/stats-view";
+import type { Stat, Stats } from "@/lib/stats";
 import { pulse } from "@/lib/world/state";
 
 const BAR = 32;
@@ -21,7 +21,8 @@ const BAR = 32;
  * to the next one through a burst of character static while the camera keeps
  * flying through the stars behind. Over the source link, the screen prints
  * the project's real code instead. Under every project, its two live
- * numbers (lib/stats.ts) count up as it arrives.
+ * numbers (lib/stats.ts) count up as it arrives; those with a `refresh` are
+ * read again at that pace while their project is on screen.
  */
 export default function Work() {
   const root = useRef<HTMLElement>(null);
@@ -48,6 +49,12 @@ export default function Work() {
     const code = section.querySelector<HTMLElement>(".wk-screen .code");
     const statEls = Array.from(section.querySelectorAll<HTMLElement>(".wk-stat"));
     let stats: Stats["projects"] | null = null;
+    let loading = false;
+    /** what each number shows, so a live read only moves what changed */
+    const shown: (Stat | undefined)[] = [];
+    /** when the live numbers were last asked for */
+    let liveAt = 0;
+    let poll = 0;
     let reading = false;
     let lastBar = -1;
     const offs: (() => void)[] = [bindHoverScramble(section)];
@@ -70,12 +77,19 @@ export default function Work() {
     );
 
     // the numbers of the project on show; their place is kept while they load
-    const showStats = (p: Project) => {
+    const showStats = (p: Project, update = false) => {
       const list = stats?.[p.slug] ?? [];
       statEls.forEach((el, k) => {
         const s = list[k];
+        const was = shown[k];
+        shown[k] = s;
         const value = el.querySelector<HTMLElement>("dd");
         const label = el.querySelector<HTMLElement>("dt");
+        // a live read: a number that changed runs on from the one it showed
+        if (update && s && was?.label === s.label) {
+          if (value && s.value !== was.value) countTo(value, s.value, 0, s, was.value);
+          return;
+        }
         el.classList.toggle("is-empty", !s);
         if (!value || !label) return;
         if (!s) {
@@ -93,12 +107,47 @@ export default function Work() {
         countTo(value, s.value, 0.15 + k * 0.12, s);
       });
     };
-    const getStats = () =>
-      fetchStats().then((s) => {
-        if (!alive || stats || !s) return;
-        stats = s.projects;
+    const anyLive = projects.some((p) => refreshOf(p) > 0);
+    const askLive = () => {
+      liveAt = Date.now();
+      return fetchLive();
+    };
+    const getStats = () => {
+      if (loading || stats) return;
+      loading = true;
+      Promise.all([fetchStats(), anyLive ? askLive() : null]).then(([counted, live]) => {
+        loading = false;
+        if (!alive || (!counted && !live)) return;
+        stats = mergeStats(projects, live?.projects, counted?.projects);
         if (active >= 0) showStats(projects[active]);
+        schedule();
       });
+    };
+
+    // live numbers are read again at their pace, only while their project
+    // is on screen and the tab is open; the first read after a pause is at once
+    const schedule = () => {
+      window.clearTimeout(poll);
+      const every = refreshOf(projects[active]) * 1000;
+      if (!alive || !stats || !visible || document.hidden || !every) return;
+      poll = window.setTimeout(
+        () =>
+          askLive().then((live) => {
+            if (!alive) return;
+            if (live && stats) {
+              stats = mergeStats(projects, live.projects, stats);
+              if (active >= 0) showStats(projects[active], true);
+            }
+            schedule();
+          }),
+        Math.max(0, liveAt + every - Date.now()),
+      );
+    };
+    document.addEventListener("visibilitychange", schedule);
+    offs.push(() => {
+      window.clearTimeout(poll);
+      document.removeEventListener("visibilitychange", schedule);
+    });
 
     const setActive = (i: number) => {
       if (i === active) return;
@@ -122,6 +171,7 @@ export default function Work() {
       if (desc) textInVaried(desc, { text: p.description, duration: 0.9, spread: 0.85 });
       if (tech) tech.textContent = p.tech.join(" / ");
       showStats(p);
+      schedule();
       if (live) {
         live.hidden = !p.live;
         if (p.live) live.href = p.live.href;
@@ -231,6 +281,7 @@ export default function Work() {
         section,
         (v) => {
           visible = v;
+          schedule();
           if (v) loadCode();
           const cur = videos[active];
           if (!cur) return;

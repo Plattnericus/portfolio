@@ -120,7 +120,7 @@ scroll ──► camera path (Catmull-Rom between keys pinned to sections)
 
 **The data.** Everything about the site lives in [`lib/site.ts`](lib/site.ts). At build time, [`lib/snippets.ts`](lib/snippets.ts) collects real functions from every project's repositories (generated code, tests, anything credential-like and anything not in English are skipped) into `/code.json`, refreshed daily.
 
-**The numbers.** Every project names two numbers and where they come from (`stats` in `lib/site.ts`); [`lib/stats.ts`](lib/stats.ts) reads them into `/stats.json` at build time and again in the background at most every 15 minutes. Nothing needs a key. Repositories are read over git's own wire protocol, the one `git clone` uses, not GitHub's REST API, so there is no API rate limit: one request for the tree, one for exactly the files a number needs. A number is a count of files, a count of matches, or a value written in a file (neurons, grass blades, translated strings, terminal commands), optionally multiplied by another (hand points = joints x hands); "lines of code" counts the non-blank hand-written lines of every repository of a project and skips anything generated, minified, vendored or translated. Product numbers (games played, houses, downloads on Modrinth and CurseForge added up) come from public JSON endpoints. What no public source counts can be given by hand (`fixed`, used for POKYH's students and schools). A number that cannot be read is left out, and a failed refresh keeps the last complete set online.
+**The numbers.** Every project names two numbers and where they come from (`stats` in `lib/site.ts`); [`lib/stats.ts`](lib/stats.ts) reads them into `/stats.json` at build time and again in the background at most every 15 minutes. Repositories are read over git's own wire protocol, the one `git clone` uses, not GitHub's REST API, so there is no API rate limit: one request for the tree, one for exactly the files a number needs. A number is a count of files, a count of matches, or a value written in a file (neurons, grass blades, translated strings, terminal commands), optionally multiplied by another (hand points = joints x hands); "lines of code" counts the non-blank hand-written lines of every repository of a project and skips anything generated, minified, vendored or translated. Product numbers (games played, houses, downloads on Modrinth and CurseForge added up) come from public JSON endpoints. A number with a `refresh` is live: POKYH's users and schools come from its own API (`key` sends `POKYH_API` as a header, on the server only) and are served apart as `/live.json`, read at most every 30 seconds and cached by the CDN for as long; the page asks again every 30 seconds while POKYH is on screen and the tab is open, and a changed number counts on from the one it showed. What no source counts can be given by hand (`fixed`). A number that cannot be read is left out, a failed refresh keeps the last complete set online, and a live number keeps its last value.
 
 ## Nexor Grid
 
@@ -144,7 +144,7 @@ python3 scripts/nexor-grid/modules.py   # its module grids, for the loader's let
 | Frame rate | 120 fps on a 120 Hz display, worst frame about 10 ms |
 | Without a GPU | the world draws only when something changes; total blocking time 0 ms |
 | Lighthouse 13 | 100 in every category, desktop and mobile (production build, measured locally with software WebGL as PageSpeed Insights uses) |
-| Routes | all prerendered, `/code.json` revalidated daily, `/stats.json` every 15 minutes |
+| Routes | all prerendered, `/code.json` revalidated daily, `/stats.json` every 15 minutes; only `/live.json` runs on request (CDN-cached for 30 seconds) |
 
 Measured on the production build in Chrome on the development machine.
 
@@ -204,10 +204,11 @@ The address is never hard-coded outside [`lib/site.ts`](lib/site.ts), and these 
 | `VERCEL_PROJECT_PRODUCTION_URL` | used when the variable above is not set (Vercel sets it) |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | contact address |
 | `GOOGLE_SITE_VERIFICATION` | Search Console verification tag |
+| `POKYH_API` | key for POKYH's stats API (secret, server only; see `.env.example`); without it POKYH shows no numbers |
 
 ### Adding a project
 
-Add an entry to `projects` in `lib/site.ts`: `source` for the repository, `stats` for its numbers (one or two, each a caption and a source: `files`, `count`, `value`, `json`, `lines` or `fixed`, see `StatSource`; `times`, `format: "compact"` and `suffix` are optional), optionally `code` for the first excerpt (a file and a line to start at) and `codeFrom` for more repositories to draw excerpts from. Add a clip to `public/clips/`:
+Add an entry to `projects` in `lib/site.ts`: `source` for the repository, `stats` for its numbers (one or two, each a caption and a source: `files`, `count`, `value`, `json`, `lines` or `fixed`, see `StatSource`; `times`, `format: "compact"`, `suffix` and `refresh` are optional), optionally `code` for the first excerpt (a file and a line to start at) and `codeFrom` for more repositories to draw excerpts from. Add a clip to `public/clips/`:
 
 ```bash
 ffmpeg -i in.mp4 -vf "scale=384:288:flags=lanczos,fps=30" -an \
@@ -217,11 +218,11 @@ ffmpeg -i in.mp4 -vf "scale=384:288:flags=lanczos,fps=30" -an \
 ### Structure
 
 ```
-app/                         page, layout and metadata, 404, privacy, code.json, stats.json, generated text files
+app/                         page, layout and metadata, 404, privacy, code.json, stats.json, live.json, generated text files
 components/                  one file per section, the loader, the shell and the hidden parts
 lib/site.ts                  all content and configuration
 lib/snippets.ts              code excerpts from GitHub
-lib/stats.ts                 the live numbers under the projects, over git and public endpoints
+lib/stats.ts                 the numbers under the projects, over git and endpoints
 lib/ascii/                   glyph grid, headlines, loader letters, films, water, zoom, black hole
 lib/world/                   renderer, shaders, text SDFs, camera path, starfield
 scripts/nexor-grid/          the typeface generator

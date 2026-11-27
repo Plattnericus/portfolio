@@ -57,8 +57,8 @@ export const author = `${site.name} / ${site.handle}`;
 /**
  * Where a live number under a project comes from. lib/stats.ts reads it
  * again every few minutes, from the repo itself (over git, `repo` defaults
- * to the project's `source`) or from a public endpoint; nothing needs a key.
- * Patterns are regular expressions, matched line by line unless noted.
+ * to the project's `source`) or from an endpoint. Patterns are regular
+ * expressions, matched line by line unless noted.
  */
 export type StatSource =
   /** non-blank lines of hand-written code across every repo of the project */
@@ -72,8 +72,12 @@ export type StatSource =
    * matches `in`: the largest, or how many different ones there are
    */
   | { repo?: string; in: string; value: string; pick: "max" | "distinct"; scale?: number }
-  /** a field of a public JSON endpoint (a list counts its items; `a.b` reads nested); `when` must be true */
-  | { json: string; field: string; when?: string }
+  /**
+   * a field of a JSON endpoint (a list counts its items; `a.b` reads nested);
+   * `when` must be true. `key` sends the environment variable `env` as the
+   * header `header`: it is read on the server only and never reaches a browser.
+   */
+  | { json: string; field: string; when?: string; key?: { header: string; env: string } }
   /** a number given by hand, for what no public source counts */
   | { fixed: number };
 
@@ -81,6 +85,10 @@ export type StatSource =
  * One number and its caption. Several sources are added up, and `times`
  * multiplies the sum. `compact` prints 14.3k instead of 14,326; `suffix`
  * follows the number (120+).
+ *
+ * `refresh` (seconds) makes it a live number: it is served by /live.json
+ * instead of /stats.json, read at most that often, and the page asks again
+ * at that pace while the project is on screen. Meant for endpoints, not git.
  */
 export type ProjectStat = {
   label: string;
@@ -88,6 +96,7 @@ export type ProjectStat = {
   times?: StatSource;
   format?: "compact";
   suffix?: string;
+  refresh?: number;
 };
 
 export type Project = {
@@ -113,6 +122,9 @@ export type Project = {
   codeFrom?: string[];
 };
 
+const POKYH_STATS = "https://api.pokyh.com/stats";
+const POKYH_KEY = { header: "X-API-Key", env: "POKYH_API" };
+
 export const projects: Project[] = [
   {
     name: "POKYH",
@@ -129,10 +141,10 @@ export const projects: Project[] = [
       "https://github.com/bedchem/POKYH_IOS",
       "https://github.com/bedchem/POKYH_ANDROID",
     ],
-    // the school's own numbers, as on ryhox.dev: no public endpoint counts them
+    // straight from POKYH's own API (key: POKYH_API on the server), every 30 s
     stats: [
-      { label: "students use it", from: { fixed: 120 }, suffix: "+" },
-      { label: "schools", from: { fixed: 10 }, suffix: "+" },
+      { label: "users", from: { json: POKYH_STATS, field: "users.total", key: POKYH_KEY }, refresh: 30 },
+      { label: "schools", from: { json: POKYH_STATS, field: "schools", key: POKYH_KEY }, refresh: 30 },
     ],
     clip: "/clips/pokyh.mp4",
   },

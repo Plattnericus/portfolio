@@ -2,21 +2,49 @@
 
 import { gsap } from "gsap";
 import { prefersReducedMotion } from "./loop";
-import type { Stats } from "./stats";
+import type { Project } from "./site";
+import type { Stat, Stats } from "./stats";
 
 /*
- * The live numbers under the projects (/stats.json, lib/stats.ts), fetched
- * once from this site, and a counter that runs them up from zero.
+ * The numbers under the projects (lib/stats.ts): /stats.json, fetched once,
+ * and /live.json, the ones with a `refresh`, asked for again on schedule.
+ * And a counter that runs them up.
  */
+
+const get = (url: string, cache: RequestCache) =>
+  fetch(url, { cache })
+    .then((r) => (r.ok ? (r.json() as Promise<Stats>) : null))
+    .catch(() => null);
 
 let pending: Promise<Stats | null> | null = null;
 
-/** the numbers, fetched once, the first time anything asks */
+/** the counted numbers, fetched once, the first time anything asks */
 export function fetchStats() {
-  pending ??= fetch("/stats.json")
-    .then((r) => (r.ok ? (r.json() as Promise<Stats>) : null))
-    .catch(() => null);
+  pending ??= get("/stats.json", "default");
   return pending;
+}
+
+/** the live numbers as they are now */
+export const fetchLive = () => get("/live.json", "no-store");
+
+/** seconds between two reads of a project's live numbers, or 0 when it has none */
+export function refreshOf(p: Project | undefined) {
+  const every = (p?.stats ?? []).flatMap((s) => (s.refresh ? [s.refresh] : []));
+  return every.length ? Math.min(...every) : 0;
+}
+
+/**
+ * Every project's numbers in the order lib/site.ts gives them, each taken
+ * from the first set that has it: a number missing from one set never
+ * wipes the value another set (or an earlier read) has.
+ */
+export function mergeStats(list: Project[], ...sets: (Stats["projects"] | null | undefined)[]) {
+  const out: Stats["projects"] = {};
+  for (const p of list)
+    out[p.slug] = p.stats
+      .map((s) => sets.map((set) => set?.[p.slug]?.find((x) => x.label === s.label)).find(Boolean))
+      .filter((x): x is Stat => !!x);
+  return out;
 }
 
 const whole = new Intl.NumberFormat("en-US");
@@ -58,9 +86,10 @@ export function clearCount(el: HTMLElement) {
 /**
  * Counts an element up to `value`, fast first and settling on the last
  * digits. It is held at the final number's width from the first frame, so
- * nothing beside it moves while it counts.
+ * nothing beside it moves while it counts. A live number that changed runs
+ * on `from` the value it showed.
  */
-export function countTo(el: HTMLElement, value: number, delay = 0, style: CountStyle = {}) {
+export function countTo(el: HTMLElement, value: number, delay = 0, style: CountStyle = {}, from = 0) {
   const format = formatFor(value, style);
   const final = format(value);
   const now = performance.now();
@@ -74,8 +103,8 @@ export function countTo(el: HTMLElement, value: number, delay = 0, style: CountS
     running.set(el, { tween: gsap.to({}, { duration: 0 }), at: now });
     return;
   }
-  const state = { v: 0 };
-  show(el, format(0));
+  const state = { v: from };
+  show(el, format(from));
   const tween = gsap.to(state, {
     v: value,
     duration: 1.6,
